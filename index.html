@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="שמש אסוציאציות אינטראקטיבית - צור מפות מוח ומפות אסוציאציה מרהיבות בעיצוב מודרני. ערוך טקסטים, התאם צבעים, שנה פריסות וייצא תמונות.">
-  <title>שמש אסוציאציות אינטראקטיבית | למה רוגע?</title>
+  <meta name="description" content="Horizon | המצפן להגשמת מטרות - מערכת אינטראקטיבית לתכנון מפות מטרות, תוכניות עבודה ומשימות חיים בעיצוב מודרני מרהיב.">
+  <title>Horizon | המצפן להגשמת מטרות</title>
   
   <!-- Tailwind CSS not requested; using customized Vanilla CSS -->
   <link rel="stylesheet" href="style.css">
@@ -19,12 +19,12 @@
     <div class="brand-section">
       <div class="logo-icon">
         <svg viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/>
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm1.88 3.12l-1.06 3.18-3.18 1.06 1.06-3.18 3.18-1.06z"/>
         </svg>
       </div>
       <div class="brand-title">
-        <h1 id="appTitle">שמש אסוציאציות אינטראקטיבית</h1>
-        <p id="appSubtitle">כלי מתקדם לתכנון מפות חשיבה וסעור מוחות</p>
+        <h1 id="appTitle">Horizon | המצפן להגשמת מטרות</h1>
+        <p id="appSubtitle">מערכת אינטראקטיבית לתכנון מפות מטרות, תוכניות עבודה ומשימות חיים</p>
       </div>
     </div>
 
@@ -35,7 +35,6 @@
         <select id="presetSelect" class="custom-select">
           <option value="calmness">למה רוגע היא מטרה בחיים?</option>
           <option value="goals">מטרות חיים והתפתחות אישית</option>
-          <option value="importance">למה זה חשוב בחיים? (שמש מקבילה)</option>
           <option value="blank">קנבס ריק לסיעור מוחות</option>
         </select>
       </div>
@@ -75,12 +74,118 @@
     <section class="canvas-container" aria-label="קנבס מפת אסוציאציות">
       <!-- Tabs for Switching Parallel Association Suns -->
       <div class="canvas-tabs glass-panel">
-        <button id="tabMain" class="tab-btn active">שמש אסוציאציות (ראשי)</button>
-        <button id="tabImportance" class="tab-btn">למה זה חשוב?</button>
+        <button id="tabGoals" class="tab-btn"><svg style="width:14px; height:14px; fill:currentColor; display:inline-block; vertical-align:middle; margin-left:4px;" viewBox="0 0 24 24"><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-12.5c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5 4.5-2.02 4.5-4.5-2.02-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>דשבורד מטרות</button>
+        <button id="tabMain" class="tab-btn active">מפת מטרות (ראשי)</button>
+        <button id="tabTasks" class="tab-btn">📋 ריכוז משימות</button>
       </div>
 
       <!-- GoJS Canvas -->
       <div id="myDiagramDiv"></div>
+
+      <!-- Tasks Dashboard View -->
+      <div id="tasksDashboardDiv" class="tasks-dashboard-container" style="display: none;">
+        <div class="dashboard-header">
+          <div class="dashboard-title-area">
+            <h2>📋 לוח משימות מרוכז</h2>
+            <p>ריכוז המשימות השבועיות והחודשיות מכל הבועות והיעדים במפות</p>
+          </div>
+          <div class="dashboard-stats">
+            <div class="stat-card">
+              <span class="stat-label">משימות חודשיות</span>
+              <span id="monthlyStatsNum" class="stat-val">0/0</span>
+              <div class="stat-progress-bg"><div id="monthlyStatsBar" class="stat-progress-bar" style="width: 0%"></div></div>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">משימות שבועיות</span>
+              <span id="weeklyStatsNum" class="stat-val">0/0</span>
+              <div class="stat-progress-bg"><div id="weeklyStatsBar" class="stat-progress-bar" style="width: 0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-toolbar">
+          <div class="toolbar-filters">
+            <div class="filter-group" style="display: none;">
+              <label>סינון לפי שמש:</label>
+              <select id="dashboardMapFilter">
+                <option value="all" selected>כל השמשות</option>
+                <option value="main">מפת מטרות (ראשי)</option>
+                <option value="importance">למה זה חשוב?</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>סטטוס משימה:</label>
+              <select id="dashboardStatusFilter">
+                <option value="all">הכל</option>
+                <option value="pending" selected>משימות פתוחות</option>
+                <option value="completed">משימות שהושלמו</option>
+              </select>
+            </div>
+            <div class="filter-group search-filter">
+              <input type="text" id="dashboardSearchInput" placeholder="חפש משימה...">
+            </div>
+            <div class="filter-group dashboard-actions" style="margin-right: auto; gap: 8px; display: flex;">
+              <button id="dashboardIcsBtn" class="btn" title="ייצא קובץ תזכורות (.ics) לפתיחה באייפון">
+                <span>📅 ייצוא לאייפון (.ics)</span>
+              </button>
+              <button id="dashboardCopyBtn" class="btn" title="העתק רשימת משימות פתוחות להדבקה מהירה באייפון">
+                <span>📋 העתק משימות</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-content">
+          <!-- Weekly Tasks Column -->
+          <div class="dashboard-column glass-panel">
+            <div class="column-header">
+              <h3>⚡ משימות שבועיות</h3>
+            </div>
+            <div id="dashboardWeeklyList" class="dashboard-task-list">
+              <!-- Rendered weekly tasks -->
+            </div>
+          </div>
+
+          <!-- Monthly Tasks Column -->
+          <div class="dashboard-column glass-panel">
+            <div class="column-header">
+              <h3>📅 משימות חודשיות</h3>
+            </div>
+            <div id="dashboardMonthlyList" class="dashboard-task-list">
+              <!-- Rendered monthly tasks -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="goalsDashboardDiv" class="tasks-dashboard-container" style="display: none;">
+        <div class="dashboard-header">
+          <div class="dashboard-title-area">
+            <h2><svg style="width:22px; height:22px; fill:var(--accent-color); display:inline-block; vertical-align:middle; margin-left:6px; position:relative; top:-2px;" viewBox="0 0 24 24"><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-12.5c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5 4.5-2.02 4.5-4.5-2.02-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>לוח מטרות החיים שלי</h2>
+            <p>ריכוז מטרות העל, מטרות הביניים וההתקדמות של הבועות שהגדרת כמטרה</p>
+          </div>
+          <div class="dashboard-stats">
+            <div class="stat-card">
+              <span class="stat-label">סה"כ מטרות פעילות</span>
+              <span id="goalsTotalNum" class="stat-val">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">מטרות שהושלמו</span>
+              <span id="goalsCompletedNum" class="stat-val">0</span>
+              <div class="stat-progress-bg"><div id="goalsCompletedBar" class="stat-progress-bar" style="width: 0%"></div></div>
+            </div>
+            <div class="stat-card" style="width: 180px;">
+              <span class="stat-label">השלמת משימות כוללת</span>
+              <span id="goalsTasksProgressNum" class="stat-val">0%</span>
+              <div class="stat-progress-bg"><div id="goalsTasksProgressBar" class="stat-progress-bar" style="width: 0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="goals-grid" id="goalsGridContainer">
+          <!-- Rendered goal cards will go here dynamically -->
+        </div>
+      </div>
 
       <!-- Floating HUD toolbar (Zoom, Undo, Redo, Help) -->
       <div class="hud-toolbar glass-panel" id="hudToolbar">
@@ -92,6 +197,10 @@
         </button>
         <button id="zoomFitBtn" title="התאם למסך (Fit View)">
           <svg viewBox="0 0 24 24"><path d="M15 3h6v6h-2V5h-4V3zM9 3H3v6h2V5h4V3zm10 16h-4v2h6v-6h-2v4zM9 21v-2H5v-4H3v6h6z"/></svg>
+        </button>
+        
+        <button id="panModeBtn" title="מצב גרירת קנבס (החזק מקש רווח / לחץ להפעלה)">
+          <svg viewBox="0 0 24 24" style="width:16px; height:16px;"><path fill="currentColor" d="M12 2c-.55 0-1 .45-1 1v8.18l-2.02-.41c-.06-.01-.13-.02-.2-.02-.27 0-.52.11-.71.29L7 12l5.79 5.79c.31.31.73.49 1.18.49H20c.9 0 1.63-.73 1.63-1.62L21.2 11c-.01-.6-.48-1.07-1.07-1.07h-.13V6c0-.55-.45-1-1-1s-1 .45-1 1v3h-1V5c0-.55-.45-1-1-1s-1 .45-1 1v4h-1V3c0-.55-.45-1-1-1z"/></svg>
         </button>
         
         <div class="hud-divider"></div>
@@ -155,6 +264,29 @@
               <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
                 <input type="checkbox" id="fontItalic" style="accent-color: var(--accent-color);">
                 <em>נטוי</em>
+              </label>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
+              <label>צבע גופן (כיתוב)</label>
+              <div class="color-picker-grid" id="textColorGrid">
+                <!-- Text colors injected via JS -->
+              </div>
+            </div>
+
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); display: flex; flex-direction: column; gap: 8px;">
+
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: var(--success-color); font-weight: 600;">
+                <input type="checkbox" id="nodeCompleted" style="accent-color: var(--success-color); width: 16px; height: 16px;">
+                סימון משימה/יעד כבוצע
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: #ffab00; font-weight: 600;">
+                <input type="checkbox" id="nodeHighlighted" style="accent-color: #ffab00; width: 16px; height: 16px;">
+                ⭐ הדגשת הבועה (אפקט זוהר)
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: var(--accent-color); font-weight: 600;">
+                <input type="checkbox" id="nodeIsGoal" style="accent-color: var(--accent-color); width: 16px; height: 16px;">
+                <svg style="width:16px; height:16px; fill:currentColor; display:inline-block; vertical-align:middle;" viewBox="0 0 24 24"><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-12.5c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5 4.5-2.02 4.5-4.5-2.02-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg> הגדר כבועת יעד / מטרה
               </label>
             </div>
           </div>
@@ -390,6 +522,17 @@
           <input type="text" id="workPlanNodeTextInput" placeholder="הכנס שם למטרה...">
         </div>
 
+        <div style="display: flex; align-items: center; gap: 16px; margin-top: -6px; margin-bottom: 2px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: var(--success-color); font-weight: 600;">
+            <input type="checkbox" id="workPlanNodeCompleted" style="accent-color: var(--success-color); width: 18px; height: 18px;">
+            סימון משימה/יעד זו כבוצעו (Completed)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: #ffab00; font-weight: 600;">
+            <input type="checkbox" id="workPlanNodeHighlighted" style="accent-color: #ffab00; width: 18px; height: 18px;">
+            הדגשת בועה זו (אפקט זוהר)
+          </label>
+        </div>
+
         <div class="form-group">
           <label for="workPlanGrandGoal">מטרת על (החזון הגדול)</label>
           <input type="text" id="workPlanGrandGoal" placeholder="מהי מטרת העל שאתה רוצה להשיג כאן?">
@@ -400,12 +543,51 @@
           <input type="text" id="workPlanMilestoneGoal" placeholder="מהי מטרת הביניים להשגת היעד?">
         </div>
 
+        <div class="form-group">
+          <label for="workPlanCurrentStatus">סטטוס נוכחי</label>
+          <input type="text" id="workPlanCurrentStatus" placeholder="מה הסטטוס הנוכחי של המטרה? (לדוגמה: בתהליך, טרם התחיל, מושהה)">
+        </div>
+
+        <div class="form-group">
+          <label for="workPlanWebsiteLink">קישור לאתר (אופציונלי)</label>
+          <input type="url" id="workPlanWebsiteLink" placeholder="https://example.com">
+        </div>
+
+        <!-- Quantitative Goal Options -->
+        <div style="background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-glass); display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; color: var(--accent-color); font-weight: 600; margin: 0;">
+            <input type="checkbox" id="workPlanIsQuantitative" style="accent-color: var(--accent-color); width: 16px; height: 16px;">
+            📊 הגדר כמטרה כמותית (מדידה במספרים)
+          </label>
+          
+          <div id="quantitativeFields" style="display: none; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 4px;">
+            <div class="form-group" style="margin: 0;">
+              <label for="workPlanTargetValue" style="font-size: 0.8rem; margin-bottom: 4px;">יעד כמותי סופי</label>
+              <input type="number" id="workPlanTargetValue" placeholder="למשל: 100" style="margin: 0;">
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label for="workPlanCurrentValue" style="font-size: 0.8rem; margin-bottom: 4px;">ערך כמותי נוכחי</label>
+              <input type="number" id="workPlanCurrentValue" placeholder="למשל: 25" style="margin: 0;">
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label for="workPlanUnit" style="font-size: 0.8rem; margin-bottom: 4px;">יחידת מידה</label>
+              <input type="text" id="workPlanUnit" placeholder="למשל: ק"ג, ספרים, ₪" style="margin: 0;">
+            </div>
+          </div>
+        </div>
+
         <!-- Monthly and Weekly Goals Grid with Task Lists -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 4px;">
           
           <!-- Column 1: Monthly Goal and Tasks -->
           <div class="form-group" style="background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-glass);">
-            <label for="workPlanMonthlyGoal" style="font-weight: 700; color: var(--accent-color);">מטרה חודשית</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="workPlanMonthlyGoal" style="font-weight: 700; color: var(--accent-color); margin: 0;">מטרה חודשית</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label for="workPlanMonthlyDate" style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">תאריך יעד:</label>
+                <input type="date" id="workPlanMonthlyDate" style="padding: 2px 6px; font-size: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-glass); color: var(--text-primary); border-radius: var(--border-radius-sm); outline: none; font-family: inherit; cursor: pointer;">
+              </div>
+            </div>
             <input type="text" id="workPlanMonthlyGoal" placeholder="מה היעד שלך לחודש זה?" style="margin-bottom: 8px;">
             
             <label style="font-size: 0.8rem; margin-bottom: 4px; display: block; font-weight: 500;">משימות חודשיות</label>
@@ -421,7 +603,13 @@
           
           <!-- Column 2: Weekly Goal and Tasks -->
           <div class="form-group" style="background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-glass);">
-            <label for="workPlanWeeklyGoal" style="font-weight: 700; color: var(--accent-color);">מטרה שבועית</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="workPlanWeeklyGoal" style="font-weight: 700; color: var(--accent-color); margin: 0;">מטרה שבועית</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label for="workPlanWeeklyDate" style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">תאריך יעד:</label>
+                <input type="date" id="workPlanWeeklyDate" style="padding: 2px 6px; font-size: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-glass); color: var(--text-primary); border-radius: var(--border-radius-sm); outline: none; font-family: inherit; cursor: pointer;">
+              </div>
+            </div>
             <input type="text" id="workPlanWeeklyGoal" placeholder="מה היעד שלך לשבוע זה?" style="margin-bottom: 8px;">
             
             <label style="font-size: 0.8rem; margin-bottom: 4px; display: block; font-weight: 500;">משימות שבועיות</label>
@@ -469,6 +657,18 @@
     <div class="context-menu-item" id="ctxWorkPlan">
       <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
       ערוך תוכנית עבודה
+    </div>
+    <div class="context-menu-item" id="ctxToggleCompleted">
+      <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      <span id="ctxToggleCompletedText">סמן כבוצע</span>
+    </div>
+    <div class="context-menu-item" id="ctxToggleHighlight">
+      <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+      <span id="ctxToggleHighlightText">הדגש בועה</span>
+    </div>
+    <div class="context-menu-item" id="ctxToggleGoal">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-12.5c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5 4.5-2.02 4.5-4.5-2.02-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      <span id="ctxToggleGoalText">הגדר כמטרה</span>
     </div>
     <div class="context-menu-item danger" id="ctxDeleteNode">
       <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>

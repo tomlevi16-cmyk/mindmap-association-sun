@@ -11,6 +11,12 @@ let activeWorkPlanNode = null;
 let activeTab = 'main';
 let tempMonthlyTasks = [];
 let tempWeeklyTasks = [];
+let isPanMode = false;
+let isSpacePressed = false;
+let panModeBySpace = false;
+let lastActiveMapTab = 'main';
+let draggedGoalNodeKey = null;
+let expandedGoalKeys = new Set();
 
 // Curated modern HSL colors (Fill / Stroke pairs)
 const colorPresets = [
@@ -27,6 +33,19 @@ const colorPresets = [
   { fill: '#4338ca', stroke: '#6366f1', name: 'אינדיגו' },     // Indigo
   { fill: '#2d3748', stroke: '#4a5568', name: 'אפור כהה' }     // Gray (Leaves default)
 ];
+
+// Migration helper: sets isGoal to true if any goal-related fields exist, else false
+function migrateNodeData(nodes) {
+  if (!Array.isArray(nodes)) return;
+  nodes.forEach(node => {
+    if (node.isGoal === undefined) {
+      const hasGoalData = !!node.workPlan || !!node.grandGoal || !!node.milestoneGoal || !!node.monthlyGoal || !!node.weeklyGoal ||
+                          (Array.isArray(node.weeklyTasks) && node.weeklyTasks.length > 0) ||
+                          (Array.isArray(node.monthlyTasks) && node.monthlyTasks.length > 0);
+      node.isGoal = hasGoalData;
+    }
+  });
+}
 
 // Presets data models
 const presets = {
@@ -94,29 +113,6 @@ const presets = {
       { key: 1, text: "נושא מרכזי חדש\n(דאבל קליק לעריכה)", fill: "#ffb300", stroke: "#ff8f00", fontSize: 16, isBold: true, shape: "RoundedRectangle" }
     ],
     links: []
-  },
-  importance: {
-    nodes: [
-      { key: 1, text: "למה זה חשוב?", fill: "#ffb300", stroke: "#ff8f00", fontSize: 16, isBold: true, shape: "RoundedRectangle" },
-      { key: 2, text: "בריאות הנפש", fill: "#1e3a8a", stroke: "#3b82f6", fontSize: 14, isBold: true, shape: "RoundedRectangle" },
-      { key: 21, text: "מניעת שחיקה", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 22, text: "שיפור השינה", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 3, text: "קשרים חברתיים", fill: "#065f46", stroke: "#10b981", fontSize: 14, isBold: true, shape: "RoundedRectangle" },
-      { key: 31, text: "הקשבה אמיתית", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 32, text: "פחות כעסים", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 4, text: "הצלחה בקריירה", fill: "#7c2d12", stroke: "#ea580c", fontSize: 14, isBold: true, shape: "RoundedRectangle" },
-      { key: 41, text: "החלטות שקולות", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 42, text: "ריכוז גבוה", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 5, text: "איכות חיים", fill: "#6b21a8", stroke: "#a855f7", fontSize: 14, isBold: true, shape: "RoundedRectangle" },
-      { key: 51, text: "ליהנות מהרגע", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" },
-      { key: 52, text: "יציבות פנימית", fill: "#2d3748", stroke: "#4a5568", fontSize: 13, shape: "Ellipse" }
-    ],
-    links: [
-      { from: 1, to: 2, stroke: "#3b82f6", strokeWidth: 3 }, { from: 2, to: 21, stroke: "#4a5568", strokeWidth: 2 }, { from: 2, to: 22, stroke: "#4a5568", strokeWidth: 2 },
-      { from: 1, to: 3, stroke: "#10b981", strokeWidth: 3 }, { from: 3, to: 31, stroke: "#4a5568", strokeWidth: 2 }, { from: 3, to: 32, stroke: "#4a5568", strokeWidth: 2 },
-      { from: 1, to: 4, stroke: "#ea580c", strokeWidth: 3 }, { from: 4, to: 41, stroke: "#4a5568", strokeWidth: 2 }, { from: 4, to: 42, stroke: "#4a5568", strokeWidth: 2 },
-      { from: 1, to: 5, stroke: "#a855f7", strokeWidth: 3 }, { from: 5, to: 51, stroke: "#4a5568", strokeWidth: 2 }, { from: 5, to: 52, stroke: "#4a5568", strokeWidth: 2 }
-    ]
   }
 };
 
@@ -139,9 +135,31 @@ function initApp() {
   // Setup Event Listeners for HTML UI Elements
   setupUIEventListeners();
 
-  // Load active tab and restore its data
-  const savedTab = localStorage.getItem('mindmap_active_tab') || 'main';
-  switchTab(savedTab, false);
+  // Load data from DB persistent storage first, then switch to tab
+  loadFromDB().finally(() => {
+    // Populate myDiagram with loaded main model immediately
+    if (myDiagram) {
+      const saveKey = 'mindmap_auto_save_main';
+      let savedModel = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
+      if (savedModel) {
+        try {
+          const loadedModel = go.Model.fromJson(savedModel);
+          loadedModel.linkFromPortIdProperty = "fromPort";
+          loadedModel.linkToPortIdProperty = "toPort";
+          migrateNodeData(loadedModel.nodeDataArray);
+          myDiagram.model = loadedModel;
+        } catch (e) {
+          console.error("Failed to load model on startup:", e);
+        }
+      }
+    }
+
+    const savedTab = localStorage.getItem('mindmap_active_tab') || 'main';
+    switchTab(savedTab, false);
+
+    // Sync with Libero assets dynamically
+    syncLiberoLiquidAssets().catch(err => console.error("Libero sync error:", err));
+  });
 }
 
 // Helper to recursively collect descendants of a node for branch dragging
@@ -160,6 +178,7 @@ function initDiagram() {
 
   myDiagram = $(go.Diagram, "myDiagramDiv", {
     "undoManager.isEnabled": true,
+    "scrollMode": go.Diagram.InfiniteScroll,
     // Smooth scroll and zoom behavior
     "animationManager.duration": 300,
     "toolManager.mouseWheelBehavior": go.ToolManager.WheelZoom,
@@ -264,6 +283,9 @@ function initDiagram() {
       { 
         locationSpot: go.Spot.Center, 
         locationObjectName: "BODY",
+        isShadowed: false,
+        shadowBlur: 15,
+        shadowOffset: new go.Point(0, 0),
         // Show/hide port handles on hover
         mouseEnter: (e, node) => {
           node.findObject("PORT_T").opacity = 1;
@@ -281,16 +303,25 @@ function initDiagram() {
         doubleClick: (e, obj) => {
           const node = obj.part;
           if (node instanceof go.Node) {
+            if (!node.data.isGoal) {
+              myDiagram.startTransaction("set as goal");
+              myDiagram.model.setDataProperty(node.data, "isGoal", true);
+              myDiagram.commitTransaction("set as goal");
+              updateSidebarInspector();
+            }
             openWorkPlanModal(node);
           }
         }
       },
       new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
       new go.Binding("text", "text"),
+      new go.Binding("isShadowed", "isHighlighted"),
+      new go.Binding("shadowColor", "stroke"),
       
       // Main Body of the node (draggable from here)
       $(go.Panel, "Auto",
         { name: "BODY" },
+        new go.Binding("opacity", "completed", c => c ? 0.6 : 1.0),
         
         // Node shape
         $(go.Shape, "RoundedRectangle", {
@@ -302,7 +333,8 @@ function initDiagram() {
         },
         new go.Binding("figure", "shape"),
         new go.Binding("fill", "fill"),
-        new go.Binding("stroke", "stroke")),
+        new go.Binding("stroke", "stroke"),
+        new go.Binding("strokeWidth", "isHighlighted", h => h ? 5.0 : 2.5)),
         
         // Node text
         $(go.TextBlock, {
@@ -313,6 +345,7 @@ function initDiagram() {
           alignment: go.Spot.Center,
           textAlign: "center"
         },
+        new go.Binding("stroke", "textColor", (c) => c || "#ffffff"),
         new go.Binding("font", "", (data) => {
           const size = data.fontSize || 14;
           const isBold = data.isBold ? "bold " : "";
@@ -320,6 +353,53 @@ function initDiagram() {
           return `${isBold}${isItalic}${size}px Rubik, Heebo, sans-serif`;
         }),
         new go.Binding("text").makeTwoWay())
+
+      ),
+
+      // Checkmark badge for completed nodes
+      $(go.Panel, "Auto",
+        {
+          alignment: go.Spot.TopLeft,
+          alignmentFocus: go.Spot.Center,
+          visible: false
+        },
+        new go.Binding("visible", "completed"),
+        $(go.Shape, "Circle", {
+          width: 18, height: 18,
+          fill: "#10b981", stroke: "#090d16", strokeWidth: 1.5
+        }),
+        $(go.TextBlock, "✓", {
+          stroke: "#ffffff",
+          font: "bold 11px sans-serif",
+          alignment: go.Spot.Center
+        })
+      ),
+
+      // Target badge for goal nodes (bullseye target icon)
+      $(go.Panel, "Spot",
+        {
+          alignment: go.Spot.TopRight,
+          alignmentFocus: go.Spot.Center,
+          visible: false
+        },
+        new go.Binding("visible", "isGoal"),
+        // Outer ring (dark background, white border)
+        $(go.Shape, "Circle", {
+          width: 22, height: 22,
+          fill: "#090d16", stroke: "#ffffff", strokeWidth: 1.5
+        }),
+        // Inner target circle ring
+        $(go.Shape, "Circle", {
+          width: 12, height: 12,
+          fill: "transparent", stroke: "#ffffff", strokeWidth: 1,
+          alignment: go.Spot.Center
+        }),
+        // Central bullseye dot (white bullseye center dot)
+        $(go.Shape, "Circle", {
+          width: 5, height: 5,
+          fill: "#ffffff", stroke: null,
+          alignment: go.Spot.Center
+        })
       ),
 
       // Hover ports for drawing connections
@@ -327,7 +407,7 @@ function initDiagram() {
         name: "PORT_T",
         alignment: go.Spot.Top,
         width: 8, height: 8,
-        fill: "#38bdf8", stroke: null,
+        fill: "#f5a623", stroke: null,
         portId: "T",
         fromLinkable: true, toLinkable: true,
         cursor: "pointer",
@@ -337,7 +417,7 @@ function initDiagram() {
         name: "PORT_B",
         alignment: go.Spot.Bottom,
         width: 8, height: 8,
-        fill: "#38bdf8", stroke: null,
+        fill: "#f5a623", stroke: null,
         portId: "B",
         fromLinkable: true, toLinkable: true,
         cursor: "pointer",
@@ -347,7 +427,7 @@ function initDiagram() {
         name: "PORT_L",
         alignment: go.Spot.Left,
         width: 8, height: 8,
-        fill: "#38bdf8", stroke: null,
+        fill: "#f5a623", stroke: null,
         portId: "L",
         fromLinkable: true, toLinkable: true,
         cursor: "pointer",
@@ -357,7 +437,7 @@ function initDiagram() {
         name: "PORT_R",
         alignment: go.Spot.Right,
         width: 8, height: 8,
-        fill: "#38bdf8", stroke: null,
+        fill: "#f5a623", stroke: null,
         portId: "R",
         fromLinkable: true, toLinkable: true,
         cursor: "pointer",
@@ -390,11 +470,11 @@ function initDiagram() {
       )
     );
 
-  // Custom Selection Adornment (🔵 Blue selection ring + (+) button to add child)
+  // Custom Selection Adornment (Gold selection ring + (+) button to add child)
   myDiagram.nodeTemplate.selectionAdornmentTemplate =
     $(go.Adornment, "Spot",
       $(go.Panel, "Auto",
-        $(go.Shape, { fill: null, stroke: "#38bdf8", strokeWidth: 2.5 }),
+        $(go.Shape, { fill: null, stroke: "#f5a623", strokeWidth: 2.5 }),
         $(go.Placeholder)
       ),
       $(go.Panel, "Auto",
@@ -403,11 +483,11 @@ function initDiagram() {
           click: addNodeAndLink,
           cursor: "pointer",
           toolTip: $(go.Adornment, "Auto",
-            $(go.Shape, { fill: "#1e293b", stroke: "#38bdf8" }),
+            $(go.Shape, { fill: "#18181c", stroke: "#f5a623" }),
             $(go.TextBlock, "הוסף ענף ובן חדש", { margin: 6, stroke: "white", font: "11px Rubik, sans-serif" })
           )
         },
-        $(go.Shape, "Circle", { width: 22, height: 22, fill: "#38bdf8", stroke: null }),
+        $(go.Shape, "Circle", { width: 22, height: 22, fill: "#f5a623", stroke: null }),
         $(go.TextBlock, "+", { font: "bold 16px sans-serif", stroke: "#090d16", alignment: go.Spot.Center })
       )
     );
@@ -473,10 +553,12 @@ function generateColorPickers() {
   const fillGrid = document.getElementById('fillColorGrid');
   const strokeGrid = document.getElementById('strokeColorGrid');
   const linkGrid = document.getElementById('linkColorGrid');
+  const textGrid = document.getElementById('textColorGrid');
 
   fillGrid.innerHTML = '';
   strokeGrid.innerHTML = '';
   linkGrid.innerHTML = '';
+  if (textGrid) textGrid.innerHTML = '';
 
   colorPresets.forEach((color, index) => {
     // Fill color options
@@ -507,7 +589,34 @@ function generateColorPickers() {
     linkOpt.addEventListener('click', () => selectLinkColor(color.stroke));
     linkGrid.appendChild(linkOpt);
   });
+
+  // Text color picker options
+  const textColors = [
+    { color: '#ffffff', name: 'לבן' },
+    { color: '#cbd5e1', name: 'אפור בהיר' },
+    { color: '#090d16', name: 'שחור פחם' },
+    { color: '#ffb300', name: 'זהב' },
+    { color: '#10b981', name: 'ירוק' },
+    { color: '#3b82f6', name: 'כחול' },
+    { color: '#f43f5e', name: 'אדום' }
+  ];
+
+  if (textGrid) {
+    textColors.forEach(item => {
+      const opt = document.createElement('div');
+      opt.className = 'color-option';
+      opt.style.backgroundColor = item.color;
+      opt.dataset.color = item.color;
+      opt.title = item.name;
+      if (item.color === '#ffffff') {
+        opt.style.border = '1px solid rgba(255, 255, 255, 0.4)';
+      }
+      opt.addEventListener('click', () => selectNodeTextColor(item.color));
+      textGrid.appendChild(opt);
+    });
+  }
 }
+
 
 // Sync selection to Sidebar Property inspector
 function updateSidebarInspector() {
@@ -517,23 +626,49 @@ function updateSidebarInspector() {
   const linkEditor = document.getElementById('linkEditorSection');
   
   const sel = myDiagram.selection;
+  const selectedNodes = [];
+  const selectedLinks = [];
 
-  if (sel.count === 1) {
-    const part = sel.first();
-    emptyState.style.display = 'none';
-
+  sel.each(part => {
     if (part instanceof go.Node) {
-      linkEditor.style.display = 'none';
-      nodeEditor.style.display = 'block';
+      selectedNodes.push(part);
+    } else if (part instanceof go.Link) {
+      selectedLinks.push(part);
+    }
+  });
+
+  // Clear indeterminate states first to be safe
+  ['fontBold', 'fontItalic', 'nodeCompleted', 'nodeHighlighted', 'nodeIsGoal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.indeterminate = false;
+  });
+
+  if (selectedNodes.length > 0) {
+    emptyState.style.display = 'none';
+    linkEditor.style.display = 'none';
+    nodeEditor.style.display = 'block';
+
+    if (selectedNodes.length === 1) {
+      const part = selectedNodes[0];
       selectionText.innerText = part.data.key === 1 ? 'עריכת בועה ראשית (שורש)' : 'עריכת בועה נבחרת';
       
       // Load current properties to sidebar form
       const data = part.data;
-      document.getElementById('nodeTextVal').value = data.text || '';
+      const textVal = document.getElementById('nodeTextVal');
+      textVal.value = data.text || '';
+      textVal.disabled = false;
+      textVal.placeholder = 'הקלד טקסט...';
+
       document.getElementById('nodeFontSize').value = data.fontSize || 14;
       document.getElementById('fontSizeVal').innerText = `${data.fontSize || 14}px`;
       document.getElementById('fontBold').checked = !!data.isBold;
       document.getElementById('fontItalic').checked = !!data.isItalic;
+      document.getElementById('nodeCompleted').checked = !!data.completed;
+      document.getElementById('nodeHighlighted').checked = !!data.isHighlighted;
+      document.getElementById('nodeIsGoal').checked = !!data.isGoal;
+      
+      // Show/hide openWorkPlanBtn based on isGoal
+      document.getElementById('openWorkPlanBtn').style.display = data.isGoal ? 'flex' : 'none';
       
       // Highlight selected shape
       const currentShape = data.shape || 'RoundedRectangle';
@@ -562,9 +697,141 @@ function updateSidebarInspector() {
         }
       });
 
-    } else if (part instanceof go.Link) {
-      nodeEditor.style.display = 'none';
-      linkEditor.style.display = 'block';
+      // Highlight selected text color
+      const textColor = data.textColor || '#ffffff';
+      document.querySelectorAll('#textColorGrid .color-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.color === textColor);
+      });
+
+
+    } else {
+      // Multi-node selection
+      selectionText.innerText = `עריכת ${selectedNodes.length} בועות נבחרות`;
+
+      const textVal = document.getElementById('nodeTextVal');
+      textVal.value = '';
+      textVal.disabled = true;
+      textVal.placeholder = '(עריכת טקסט זמינה רק בבועית בודדת)';
+
+      // Check for common properties
+      const firstData = selectedNodes[0].data;
+      let sameFontSize = true;
+      let firstFontSize = firstData.fontSize || 14;
+
+      let sameBold = true;
+      let firstBold = !!firstData.isBold;
+
+      let sameItalic = true;
+      let firstItalic = !!firstData.isItalic;
+
+      let sameCompleted = true;
+      let firstCompleted = !!firstData.completed;
+
+      let sameHighlighted = true;
+      let firstHighlighted = !!firstData.isHighlighted;
+
+      let sameIsGoal = true;
+      let firstIsGoal = !!firstData.isGoal;
+
+      let sameShape = true;
+      let firstShape = firstData.shape || 'RoundedRectangle';
+
+      let sameFill = true;
+      let firstFill = firstData.fill;
+
+      let sameStroke = true;
+      let firstStroke = firstData.stroke;
+
+      let sameTextColor = true;
+      let firstTextColor = firstData.textColor || '#ffffff';
+
+      for (let i = 1; i < selectedNodes.length; i++) {
+        const d = selectedNodes[i].data;
+        if ((d.fontSize || 14) !== firstFontSize) sameFontSize = false;
+        if (!!d.isBold !== firstBold) sameBold = false;
+        if (!!d.isItalic !== firstItalic) sameItalic = false;
+        if (!!d.completed !== firstCompleted) sameCompleted = false;
+        if (!!d.isHighlighted !== firstHighlighted) sameHighlighted = false;
+        if (!!d.isGoal !== firstIsGoal) sameIsGoal = false;
+        if ((d.shape || 'RoundedRectangle') !== firstShape) sameShape = false;
+        if (d.fill !== firstFill) sameFill = false;
+        if (d.stroke !== firstStroke) sameStroke = false;
+        if ((d.textColor || '#ffffff') !== firstTextColor) sameTextColor = false;
+      }
+
+
+      // Font size display
+      if (sameFontSize) {
+        document.getElementById('nodeFontSize').value = firstFontSize;
+        document.getElementById('fontSizeVal').innerText = `${firstFontSize}px`;
+      } else {
+        document.getElementById('nodeFontSize').value = 14;
+        document.getElementById('fontSizeVal').innerText = 'ערכים שונים';
+      }
+
+      // Helper to set checkbox state
+      const setCheckbox = (id, same, checked) => {
+        const el = document.getElementById(id);
+        if (same) {
+          el.checked = checked;
+          el.indeterminate = false;
+        } else {
+          el.checked = false;
+          el.indeterminate = true;
+        }
+      };
+
+      setCheckbox('fontBold', sameBold, firstBold);
+      setCheckbox('fontItalic', sameItalic, firstItalic);
+      setCheckbox('nodeCompleted', sameCompleted, firstCompleted);
+      setCheckbox('nodeHighlighted', sameHighlighted, firstHighlighted);
+      setCheckbox('nodeIsGoal', sameIsGoal, firstIsGoal);
+
+      // Hide openWorkPlanBtn for multi-selection
+      document.getElementById('openWorkPlanBtn').style.display = 'none';
+
+      // Shapes
+      document.querySelectorAll('.shape-btn').forEach(btn => {
+        if (sameShape && btn.dataset.shape === firstShape) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      // Colors
+      document.querySelectorAll('#fillColorGrid .color-option').forEach(opt => {
+        if (sameFill && opt.dataset.fill === firstFill) {
+          opt.classList.add('active');
+        } else {
+          opt.classList.remove('active');
+        }
+      });
+
+      document.querySelectorAll('#strokeColorGrid .color-option').forEach(opt => {
+        if (sameStroke && opt.dataset.stroke === firstStroke) {
+          opt.classList.add('active');
+        } else {
+          opt.classList.remove('active');
+        }
+      });
+
+      document.querySelectorAll('#textColorGrid .color-option').forEach(opt => {
+        if (sameTextColor && opt.dataset.color === firstTextColor) {
+          opt.classList.add('active');
+        } else {
+          opt.classList.remove('active');
+        }
+      });
+
+    }
+  } else if (selectedLinks.length > 0) {
+    emptyState.style.display = 'none';
+    nodeEditor.style.display = 'none';
+    linkEditor.style.display = 'block';
+
+    if (selectedLinks.length === 1) {
+      const part = selectedLinks[0];
       selectionText.innerText = 'עריכת קשר / קו מקשר';
 
       const data = part.data;
@@ -579,13 +846,54 @@ function updateSidebarInspector() {
           opt.classList.remove('active');
         }
       });
+    } else {
+      // Multi-link selection
+      selectionText.innerText = `עריכת ${selectedLinks.length} קשרים נבחרים`;
+
+      const firstData = selectedLinks[0].data;
+      let sameWidth = true;
+      let firstWidth = firstData.strokeWidth || 3;
+
+      let sameStyle = true;
+      let firstStyle = firstData.style || 'solid';
+
+      let sameStroke = true;
+      let firstStroke = firstData.stroke;
+
+      for (let i = 1; i < selectedLinks.length; i++) {
+        const d = selectedLinks[i].data;
+        if ((d.strokeWidth || 3) !== firstWidth) sameWidth = false;
+        if ((d.style || 'solid') !== firstStyle) sameStyle = false;
+        if (d.stroke !== firstStroke) sameStroke = false;
+      }
+
+      if (sameWidth) {
+        document.getElementById('linkWidth').value = firstWidth;
+        document.getElementById('linkWidthVal').innerText = `${firstWidth}px`;
+      } else {
+        document.getElementById('linkWidth').value = 3;
+        document.getElementById('linkWidthVal').innerText = 'ערכים שונים';
+      }
+
+      if (sameStyle) {
+        document.getElementById('linkStyleSelect').value = firstStyle;
+      } else {
+        document.getElementById('linkStyleSelect').value = 'solid'; // default fallback
+      }
+
+      document.querySelectorAll('#linkColorGrid .color-option').forEach(opt => {
+        if (sameStroke && opt.dataset.stroke === firstStroke) {
+          opt.classList.add('active');
+        } else {
+          opt.classList.remove('active');
+        }
+      });
     }
   } else {
     // Multi-selection or no selection
     nodeEditor.style.display = 'none';
     linkEditor.style.display = 'none';
     emptyState.style.display = 'flex';
-    selectionText.innerText = 'בחר רכיב במפה כדי לערוך אותו';
   }
 }
 
@@ -604,32 +912,72 @@ document.getElementById('nodeFontSize').addEventListener('input', (e) => {
   const size = parseInt(e.target.value);
   document.getElementById('fontSizeVal').innerText = `${size}px`;
   
-  const node = myDiagram.selection.first();
-  if (node instanceof go.Node) {
-    myDiagram.startTransaction("change fontSize");
-    myDiagram.model.setDataProperty(node.data, "fontSize", size);
-    myDiagram.commitTransaction("change fontSize");
-  }
+  myDiagram.startTransaction("change fontSize");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "fontSize", size);
+    }
+  });
+  myDiagram.commitTransaction("change fontSize");
 });
 
 // Save Font Bold change
 document.getElementById('fontBold').addEventListener('change', (e) => {
-  const node = myDiagram.selection.first();
-  if (node instanceof go.Node) {
-    myDiagram.startTransaction("change bold");
-    myDiagram.model.setDataProperty(node.data, "isBold", e.target.checked);
-    myDiagram.commitTransaction("change bold");
-  }
+  myDiagram.startTransaction("change bold");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "isBold", e.target.checked);
+    }
+  });
+  myDiagram.commitTransaction("change bold");
 });
 
 // Save Font Italic change
 document.getElementById('fontItalic').addEventListener('change', (e) => {
-  const node = myDiagram.selection.first();
-  if (node instanceof go.Node) {
-    myDiagram.startTransaction("change italic");
-    myDiagram.model.setDataProperty(node.data, "isItalic", e.target.checked);
-    myDiagram.commitTransaction("change italic");
-  }
+  myDiagram.startTransaction("change italic");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "isItalic", e.target.checked);
+    }
+  });
+  myDiagram.commitTransaction("change italic");
+});
+
+// Save Goal Completed change
+document.getElementById('nodeCompleted').addEventListener('change', (e) => {
+  myDiagram.startTransaction("change completed status");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "completed", e.target.checked);
+    }
+  });
+  myDiagram.commitTransaction("change completed status");
+  showToast(e.target.checked ? 'המשימות סומנו כבוצעו' : 'בוטל סימון המשימות כבוצעו', 'success');
+});
+
+// Save Goal Highlight change
+document.getElementById('nodeHighlighted').addEventListener('change', (e) => {
+  myDiagram.startTransaction("change highlighted status");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "isHighlighted", e.target.checked);
+    }
+  });
+  myDiagram.commitTransaction("change highlighted status");
+  showToast(e.target.checked ? 'הבועות סומנו כמודגשות' : 'בוטל סימון הבועות כמודגשות', 'success');
+});
+
+// Save Goal IsGoal change
+document.getElementById('nodeIsGoal').addEventListener('change', (e) => {
+  myDiagram.startTransaction("change isGoal status");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "isGoal", e.target.checked);
+    }
+  });
+  myDiagram.commitTransaction("change isGoal status");
+  showToast(e.target.checked ? 'הבועות הוגדרו כמטרות' : 'בוטלה הגדרת הבועות כמטרות', 'success');
+  updateSidebarInspector();
 });
 
 // Handle Shape Selector button clicks
@@ -641,79 +989,95 @@ document.querySelectorAll('.shape-btn').forEach(btn => {
     document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 
-    const node = myDiagram.selection.first();
-    if (node instanceof go.Node) {
-      myDiagram.startTransaction("change shape");
-      myDiagram.model.setDataProperty(node.data, "shape", shape);
-      myDiagram.commitTransaction("change shape");
-    }
+    myDiagram.startTransaction("change shape");
+    myDiagram.selection.each(part => {
+      if (part instanceof go.Node) {
+        myDiagram.model.setDataProperty(part.data, "shape", shape);
+      }
+    });
+    myDiagram.commitTransaction("change shape");
   });
 });
 
 // Apply Color Swatch to selected node (fill & stroke coordinated)
 function selectNodeColor(fill, stroke) {
-  const node = myDiagram.selection.first();
-  if (node instanceof go.Node) {
-    myDiagram.startTransaction("change color");
-    myDiagram.model.setDataProperty(node.data, "fill", fill);
-    myDiagram.model.setDataProperty(node.data, "stroke", stroke);
-    
-    // Also change child links color to match if desired (helps structure visibility)
-    node.findLinksOutOf().each((link) => {
-      myDiagram.model.setDataProperty(link.data, "stroke", stroke);
-    });
-
-    myDiagram.commitTransaction("change color");
-
-    // Re-highlight swatches
-    updateSidebarInspector();
-  }
+  myDiagram.startTransaction("change color");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "fill", fill);
+      myDiagram.model.setDataProperty(part.data, "stroke", stroke);
+      
+      // Also change child links color to match if desired (helps structure visibility)
+      part.findLinksOutOf().each((link) => {
+        myDiagram.model.setDataProperty(link.data, "stroke", stroke);
+      });
+    }
+  });
+  myDiagram.commitTransaction("change color");
+  updateSidebarInspector();
 }
 
 // Change stroke only
 function selectNodeStroke(stroke) {
-  const node = myDiagram.selection.first();
-  if (node instanceof go.Node) {
-    myDiagram.startTransaction("change stroke");
-    myDiagram.model.setDataProperty(node.data, "stroke", stroke);
-    myDiagram.commitTransaction("change stroke");
-    updateSidebarInspector();
-  }
+  myDiagram.startTransaction("change stroke");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "stroke", stroke);
+    }
+  });
+  myDiagram.commitTransaction("change stroke");
+  updateSidebarInspector();
 }
+
+// Apply Text Color Swatch to selected node(s)
+function selectNodeTextColor(color) {
+  myDiagram.startTransaction("change text color");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Node) {
+      myDiagram.model.setDataProperty(part.data, "textColor", color);
+    }
+  });
+  myDiagram.commitTransaction("change text color");
+  updateSidebarInspector();
+}
+
 
 // Change Link width
 document.getElementById('linkWidth').addEventListener('input', (e) => {
   const width = parseFloat(e.target.value);
   document.getElementById('linkWidthVal').innerText = `${width}px`;
 
-  const link = myDiagram.selection.first();
-  if (link instanceof go.Link) {
-    myDiagram.startTransaction("change link width");
-    myDiagram.model.setDataProperty(link.data, "strokeWidth", width);
-    myDiagram.commitTransaction("change link width");
-  }
+  myDiagram.startTransaction("change link width");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Link) {
+      myDiagram.model.setDataProperty(part.data, "strokeWidth", width);
+    }
+  });
+  myDiagram.commitTransaction("change link width");
 });
 
 // Change Link style dropdown
 document.getElementById('linkStyleSelect').addEventListener('change', (e) => {
   const style = e.target.value;
-  const link = myDiagram.selection.first();
-  if (link instanceof go.Link) {
-    myDiagram.startTransaction("change link style");
-    myDiagram.model.setDataProperty(link.data, "style", style);
-    myDiagram.commitTransaction("change link style");
-  }
+  myDiagram.startTransaction("change link style");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Link) {
+      myDiagram.model.setDataProperty(part.data, "style", style);
+    }
+  });
+  myDiagram.commitTransaction("change link style");
 });
 
 // Change Link color from palette
 function selectLinkColor(stroke) {
-  const link = myDiagram.selection.first();
-  if (link instanceof go.Link) {
-    myDiagram.startTransaction("change link color");
-    myDiagram.model.setDataProperty(link.data, "stroke", stroke);
-    myDiagram.commitTransaction("change link color");
-    updateSidebarInspector();
-  }
+  myDiagram.startTransaction("change link color");
+  myDiagram.selection.each(part => {
+    if (part instanceof go.Link) {
+      myDiagram.model.setDataProperty(part.data, "stroke", stroke);
+    }
+  });
+  myDiagram.commitTransaction("change link color");
+  updateSidebarInspector();
 }
 
 // Add Node branch button from Sidebar form
@@ -806,6 +1170,7 @@ function setupUIEventListeners() {
             throw new Error("Failed to create diagram model.");
         }
 
+        migrateNodeData(newModel.nodeDataArray);
         myDiagram.model = newModel;
 
         // Reset the layout type select value to default ForceDirected since the layout is reset
@@ -818,6 +1183,12 @@ function setupUIEventListeners() {
         // Clear preset selector
         document.getElementById('presetSelect').value = '';
         showToast('המפה נטענה בהצלחה', 'success');
+
+        // Save imported model to LocalStorage and DB
+        const modelStr = newModel.toJson();
+        const saveKey = activeTab === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+        localStorage.setItem(saveKey, modelStr);
+        saveToDB(activeTab, modelStr);
       } catch (err) {
         showToast('שגיאה: ' + err.message, 'error');
         console.error("Import error:", err);
@@ -847,6 +1218,10 @@ function setupUIEventListeners() {
 
   document.getElementById('zoomFitBtn').addEventListener('click', () => {
     myDiagram.commandHandler.zoomToFit();
+  });
+
+  document.getElementById('panModeBtn').addEventListener('click', () => {
+    setPanMode(!isPanMode);
   });
 
   document.getElementById('undoBtn').addEventListener('click', () => {
@@ -1011,7 +1386,7 @@ function setupUIEventListeners() {
       closeExportModal();
     } else if (pendingExportType === 'png') {
       // Draw canvas grid background if export calls for a dark theme background
-      const bgVal = currentTheme === 'dark' ? '#0d1220' : '#f1f5f9';
+      const bgVal = currentTheme === 'dark' ? '#070709' : '#f1f5f9';
       
       myDiagram.makeImageData({
         scale: 2,
@@ -1068,6 +1443,11 @@ function setupUIEventListeners() {
     workPlanNodeTextInput,
     document.getElementById('workPlanGrandGoal'),
     document.getElementById('workPlanMilestoneGoal'),
+    document.getElementById('workPlanCurrentStatus'),
+    document.getElementById('workPlanWebsiteLink'),
+    document.getElementById('workPlanTargetValue'),
+    document.getElementById('workPlanCurrentValue'),
+    document.getElementById('workPlanUnit'),
     document.getElementById('workPlanMonthlyGoal'),
     document.getElementById('workPlanWeeklyGoal')
   ];
@@ -1107,10 +1487,30 @@ function setupUIEventListeners() {
       const newText = workPlanNodeTextInput.value.trim();
       const newGrandGoal = document.getElementById('workPlanGrandGoal').value.trim();
       const newMilestoneGoal = document.getElementById('workPlanMilestoneGoal').value.trim();
+      const newCurrentStatus = document.getElementById('workPlanCurrentStatus').value.trim();
+      
+      const newIsQuantitative = document.getElementById('workPlanIsQuantitative').checked;
+      const newTargetValue = parseFloat(document.getElementById('workPlanTargetValue').value) || 0;
+      const newCurrentValue = parseFloat(document.getElementById('workPlanCurrentValue').value) || 0;
+      const newUnit = document.getElementById('workPlanUnit').value.trim();
+      
       const newMonthlyGoal = document.getElementById('workPlanMonthlyGoal').value.trim();
+      const newMonthlyGoalDate = document.getElementById('workPlanMonthlyDate').value;
       const newWeeklyGoal = document.getElementById('workPlanWeeklyGoal').value.trim();
+      const newWeeklyGoalDate = document.getElementById('workPlanWeeklyDate').value;
       const newWorkPlan = workPlanTextArea.value;
       const newInsights = document.getElementById('workPlanInsights').value;
+      const completed = document.getElementById('workPlanNodeCompleted').checked;
+      const isHighlighted = document.getElementById('workPlanNodeHighlighted').checked;
+
+      let newWebsiteLink = '';
+      const websiteLinkEl = document.getElementById('workPlanWebsiteLink');
+      if (websiteLinkEl) {
+        newWebsiteLink = websiteLinkEl.value.trim();
+        if (newWebsiteLink && !/^https?:\/\//i.test(newWebsiteLink)) {
+          newWebsiteLink = 'https://' + newWebsiteLink;
+        }
+      }
 
       if (!newText) {
         showToast('שם המטרה לא יכול להיות ריק', 'warning');
@@ -1121,19 +1521,45 @@ function setupUIEventListeners() {
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "text", newText);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "grandGoal", newGrandGoal);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "milestoneGoal", newMilestoneGoal);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "currentStatus", newCurrentStatus);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "websiteLink", newWebsiteLink);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "isQuantitative", newIsQuantitative);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "targetValue", newTargetValue);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "currentValue", newCurrentValue);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "unit", newUnit);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "monthlyGoal", newMonthlyGoal);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "monthlyGoalDate", newMonthlyGoalDate);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "weeklyGoal", newWeeklyGoal);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "weeklyGoalDate", newWeeklyGoalDate);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "monthlyTasks", tempMonthlyTasks);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "weeklyTasks", tempWeeklyTasks);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "workPlan", newWorkPlan);
       myDiagram.model.setDataProperty(activeWorkPlanNode.data, "insights", newInsights);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "completed", completed);
+      myDiagram.model.setDataProperty(activeWorkPlanNode.data, "isHighlighted", isHighlighted);
       myDiagram.commitTransaction("עריכת תוכנית עבודה");
 
       // Update sidebar in real-time
       updateSidebarInspector();
 
+      // Refresh dashboards if active
+      if (activeTab === 'goals') {
+        renderGoalsDashboard();
+      } else if (activeTab === 'tasks') {
+        renderTasksDashboard();
+      }
+
       showToast('תוכנית העבודה נשמרה בהצלחה', 'success');
       closeWorkPlanModal();
+    });
+  }
+
+  // Setup Quantitative fields display listener
+  const quantCheckListener = document.getElementById('workPlanIsQuantitative');
+  if (quantCheckListener) {
+    quantCheckListener.addEventListener('change', (e) => {
+      const qFields = document.getElementById('quantitativeFields');
+      if (qFields) qFields.style.display = e.target.checked ? 'grid' : 'none';
     });
   }
 
@@ -1168,7 +1594,8 @@ function setupUIEventListeners() {
 
   // Bind Switch Tab Event Listeners
   const tabMain = document.getElementById('tabMain');
-  const tabImportance = document.getElementById('tabImportance');
+  const tabGoals = document.getElementById('tabGoals');
+  const tabTasks = document.getElementById('tabTasks');
   if (tabMain) {
     tabMain.addEventListener('click', () => {
       if (activeTab !== 'main') {
@@ -1176,12 +1603,65 @@ function setupUIEventListeners() {
       }
     });
   }
-  if (tabImportance) {
-    tabImportance.addEventListener('click', () => {
-      if (activeTab !== 'importance') {
-        switchTab('importance');
+  if (tabGoals) {
+    tabGoals.addEventListener('click', () => {
+      if (activeTab !== 'goals') {
+        switchTab('goals');
       }
     });
+  }
+  if (tabTasks) {
+    tabTasks.addEventListener('click', () => {
+      if (activeTab !== 'tasks') {
+        switchTab('tasks');
+      }
+    });
+  }
+
+  // Dashboard filters and search input
+  const mapFilter = document.getElementById('dashboardMapFilter');
+  if (mapFilter) {
+    mapFilter.addEventListener('change', renderTasksDashboard);
+  }
+  const statusFilter = document.getElementById('dashboardStatusFilter');
+  if (statusFilter) {
+    statusFilter.addEventListener('change', renderTasksDashboard);
+  }
+  const searchInput = document.getElementById('dashboardSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', renderTasksDashboard);
+  }
+  const icsBtn = document.getElementById('dashboardIcsBtn');
+  if (icsBtn) {
+    icsBtn.addEventListener('click', exportTasksToIcs);
+  }
+  const copyBtn = document.getElementById('dashboardCopyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', copyTasksToClipboard);
+  }
+}
+
+// Toggle Canvas Panning (Hand) Mode
+function setPanMode(enabled, bySpace = false) {
+  isPanMode = enabled;
+  panModeBySpace = enabled ? bySpace : false;
+
+  const btn = document.getElementById('panModeBtn');
+  if (btn) {
+    if (enabled && !bySpace) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  }
+
+  if (myDiagram) {
+    myDiagram.startTransaction("toggle pan mode");
+    myDiagram.allowMove = !enabled;
+    myDiagram.allowSelect = !enabled;
+    // Set cursor feedback
+    myDiagram.defaultCursor = enabled ? 'grab' : 'default';
+    myDiagram.commitTransaction("toggle pan mode");
   }
 }
 
@@ -1262,6 +1742,8 @@ function loadPreset(key) {
   const nodes = JSON.parse(JSON.stringify(preset.nodes));
   const links = JSON.parse(JSON.stringify(preset.links));
 
+  migrateNodeData(nodes);
+
   const newModel = new go.GraphLinksModel(nodes, links);
   newModel.linkFromPortIdProperty = "fromPort";
   newModel.linkToPortIdProperty = "toPort";
@@ -1321,6 +1803,9 @@ function showContextMenu(obj, diagram, tool) {
   const ctxAddNode = document.getElementById('ctxAddNode');
   const ctxEditNode = document.getElementById('ctxEditNode');
   const ctxWorkPlan = document.getElementById('ctxWorkPlan');
+  const ctxToggleCompleted = document.getElementById('ctxToggleCompleted');
+  const ctxToggleHighlight = document.getElementById('ctxToggleHighlight');
+  const ctxToggleGoal = document.getElementById('ctxToggleGoal');
   const ctxDeleteNode = document.getElementById('ctxDeleteNode');
 
   if (obj !== null) {
@@ -1330,13 +1815,54 @@ function showContextMenu(obj, diagram, tool) {
     ctxDeleteNode.style.display = 'flex';
 
     if (obj instanceof go.Node) {
-      ctxWorkPlan.style.display = 'flex';
+      const isGoal = !!obj.data.isGoal;
+      
+      // Only show Work Plan option if the node is defined as a goal
+      ctxWorkPlan.style.display = isGoal ? 'flex' : 'none';
       ctxWorkPlan.onclick = () => {
         openWorkPlanModal(obj);
         hideContextMenu();
       };
+
+      ctxToggleCompleted.style.display = 'flex';
+      const isCompleted = !!obj.data.completed;
+      document.getElementById('ctxToggleCompletedText').innerText = isCompleted ? 'בטל סימון כבוצע' : 'סמן כבוצע';
+      ctxToggleCompleted.onclick = () => {
+        diagram.startTransaction("toggle completed from context menu");
+        diagram.model.setDataProperty(obj.data, "completed", !isCompleted);
+        diagram.commitTransaction("toggle completed from context menu");
+        updateSidebarInspector();
+        hideContextMenu();
+        showToast(!isCompleted ? 'המשימה/יעד סומנו כבוצעו' : 'בוטל סימון המשימה/יעד כבוצעו', 'success');
+      };
+
+      ctxToggleHighlight.style.display = 'flex';
+      const isHighlighted = !!obj.data.isHighlighted;
+      document.getElementById('ctxToggleHighlightText').innerText = isHighlighted ? 'בטל הדגשה' : 'הדגש בועה';
+      ctxToggleHighlight.onclick = () => {
+        diagram.startTransaction("toggle highlight from context menu");
+        diagram.model.setDataProperty(obj.data, "isHighlighted", !isHighlighted);
+        diagram.commitTransaction("toggle highlight from context menu");
+        updateSidebarInspector();
+        hideContextMenu();
+        showToast(!isHighlighted ? 'הבועה סומנה כמודגשת' : 'בוטל סימון הבועה כמודגשת', 'success');
+      };
+
+      ctxToggleGoal.style.display = 'flex';
+      document.getElementById('ctxToggleGoalText').innerText = isGoal ? 'בטל הגדרה כמטרה' : 'הגדר כמטרה';
+      ctxToggleGoal.onclick = () => {
+        diagram.startTransaction("toggle isGoal from context menu");
+        diagram.model.setDataProperty(obj.data, "isGoal", !isGoal);
+        diagram.commitTransaction("toggle isGoal from context menu");
+        updateSidebarInspector();
+        hideContextMenu();
+        showToast(!isGoal ? 'הבועה הוגדרה כמטרה' : 'בוטלה הגדרת הבועה כמטרה', 'success');
+      };
     } else {
       ctxWorkPlan.style.display = 'none';
+      ctxToggleCompleted.style.display = 'none';
+      ctxToggleHighlight.style.display = 'none';
+      ctxToggleGoal.style.display = 'none';
     }
 
     // Click handler adjustments
@@ -1359,6 +1885,9 @@ function showContextMenu(obj, diagram, tool) {
     ctxAddNode.style.display = 'none';
     ctxEditNode.style.display = 'none';
     ctxWorkPlan.style.display = 'none';
+    ctxToggleCompleted.style.display = 'none';
+    ctxToggleHighlight.style.display = 'none';
+    ctxToggleGoal.style.display = 'none';
     ctxDeleteNode.style.display = 'none';
   }
 }
@@ -1424,6 +1953,7 @@ function scheduleAutoSave() {
       const saveKey = activeTab === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
       localStorage.setItem(saveKey, modelStr);
       localStorage.setItem('mindmap_active_tab', activeTab);
+      saveToDB(activeTab, modelStr);
     }
   }, 1000); // 1-second debounce delay
 }
@@ -1456,6 +1986,27 @@ window.addEventListener('keydown', (e) => {
   // Delete key deletes selection (unless typing in textbox/textarea)
   if (e.key === 'Delete' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
     deleteSelected();
+  }
+
+  // Spacebar panning (when not typing)
+  if (e.key === ' ' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA' && !document.activeElement.hasAttribute('contenteditable')) {
+    // Prevent scrolling page with space
+    e.preventDefault();
+    if (!isSpacePressed) {
+      isSpacePressed = true;
+      if (!isPanMode) {
+        setPanMode(true, true);
+      }
+    }
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.key === ' ') {
+    isSpacePressed = false;
+    if (isPanMode && panModeBySpace) {
+      setPanMode(false);
+    }
   }
 });
 
@@ -1564,6 +2115,7 @@ function openWorkPlanModal(node) {
   const titleInput = document.getElementById('workPlanNodeTextInput');
   const grandGoalInput = document.getElementById('workPlanGrandGoal');
   const milestoneGoalInput = document.getElementById('workPlanMilestoneGoal');
+  const currentStatusInput = document.getElementById('workPlanCurrentStatus');
   const monthlyGoalInput = document.getElementById('workPlanMonthlyGoal');
   const weeklyGoalInput = document.getElementById('workPlanWeeklyGoal');
   const textArea = document.getElementById('workPlanTextArea');
@@ -1572,10 +2124,31 @@ function openWorkPlanModal(node) {
   titleInput.value = node.data.text || '';
   grandGoalInput.value = node.data.grandGoal || '';
   milestoneGoalInput.value = node.data.milestoneGoal || '';
+  if (currentStatusInput) currentStatusInput.value = node.data.currentStatus || '';
+  const websiteLinkInput = document.getElementById('workPlanWebsiteLink');
+  if (websiteLinkInput) websiteLinkInput.value = node.data.websiteLink || '';
+  
+  const isQuant = !!node.data.isQuantitative;
+  const quantCheck = document.getElementById('workPlanIsQuantitative');
+  if (quantCheck) {
+    quantCheck.checked = isQuant;
+  }
+  const qFields = document.getElementById('quantitativeFields');
+  if (qFields) {
+    qFields.style.display = isQuant ? 'grid' : 'none';
+  }
+  document.getElementById('workPlanTargetValue').value = node.data.targetValue !== undefined ? node.data.targetValue : '';
+  document.getElementById('workPlanCurrentValue').value = node.data.currentValue !== undefined ? node.data.currentValue : '';
+  document.getElementById('workPlanUnit').value = node.data.unit || '';
+  
   monthlyGoalInput.value = node.data.monthlyGoal || '';
+  document.getElementById('workPlanMonthlyDate').value = node.data.monthlyGoalDate || '';
   weeklyGoalInput.value = node.data.weeklyGoal || '';
+  document.getElementById('workPlanWeeklyDate').value = node.data.weeklyGoalDate || '';
   textArea.value = node.data.workPlan || '';
   insightsArea.value = node.data.insights || '';
+  document.getElementById('workPlanNodeCompleted').checked = !!node.data.completed;
+  document.getElementById('workPlanNodeHighlighted').checked = !!node.data.isHighlighted;
 
   // Copy tasks into temporary in-memory arrays
   tempMonthlyTasks = Array.isArray(node.data.monthlyTasks) ? JSON.parse(JSON.stringify(node.data.monthlyTasks)) : [];
@@ -1599,55 +2172,95 @@ function closeWorkPlanModal() {
   activeWorkPlanNode = null;
 }
 
-// Switch between parallel mind map tabs
+// Switch between parallel mind map tabs and dashboards
 function switchTab(tabId, saveCurrent = true) {
-  if (saveCurrent && myDiagram) {
+  if (saveCurrent && myDiagram && activeTab === 'main') {
     const currentModelStr = myDiagram.model.toJson();
-    const currentSaveKey = activeTab === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+    const currentSaveKey = 'mindmap_auto_save_main';
     localStorage.setItem(currentSaveKey, currentModelStr);
+    saveToDB('main', currentModelStr);
   }
 
   activeTab = tabId;
   localStorage.setItem('mindmap_active_tab', tabId);
+  if (tabId === 'main') {
+    lastActiveMapTab = 'main';
+  }
 
   // Update button active classes
   const tabMain = document.getElementById('tabMain');
-  const tabImportance = document.getElementById('tabImportance');
-  if (tabMain && tabImportance) {
+  const tabGoals = document.getElementById('tabGoals');
+  const tabTasks = document.getElementById('tabTasks');
+  if (tabMain && tabGoals && tabTasks) {
+    tabMain.classList.remove('active');
+    tabGoals.classList.remove('active');
+    tabTasks.classList.remove('active');
     if (tabId === 'main') {
       tabMain.classList.add('active');
-      tabImportance.classList.remove('active');
-    } else {
-      tabMain.classList.remove('active');
-      tabImportance.classList.add('active');
+    } else if (tabId === 'goals') {
+      tabGoals.classList.add('active');
+    } else if (tabId === 'tasks') {
+      tabTasks.classList.add('active');
     }
   }
 
-  // Load the model
-  if (myDiagram) {
-    const saveKey = tabId === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
-    let savedModel = localStorage.getItem(saveKey);
-    
-    // For main tab, fallback to old key 'mindmap_auto_save' for backwards compatibility
-    if (tabId === 'main' && !savedModel) {
-      savedModel = localStorage.getItem('mindmap_auto_save');
+  if (tabId === 'tasks' || tabId === 'goals') {
+    // Hide diagram area elements
+    if (myDiagram) {
+      document.getElementById('myDiagramDiv').style.display = 'none';
     }
+    const hud = document.getElementById('hudToolbar');
+    if (hud) hud.style.display = 'none';
+    const sidebar = document.getElementById('inspectorSidebar');
+    if (sidebar) sidebar.style.display = 'none';
+    const mainEl = document.querySelector('main');
+    if (mainEl) mainEl.style.gridTemplateColumns = '1fr';
 
-    if (savedModel) {
-      try {
-        const loadedModel = go.Model.fromJson(savedModel);
-        loadedModel.linkFromPortIdProperty = "fromPort";
-        loadedModel.linkToPortIdProperty = "toPort";
-        myDiagram.model = loadedModel;
-        myDiagram.layoutDiagram(true);
-        myDiagram.commandHandler.zoomToFit();
-      } catch (e) {
-        console.error("Failed to load saved model, loading preset", e);
-        loadPreset(tabId === 'main' ? 'calmness' : 'importance');
-      }
+    if (tabId === 'tasks') {
+      if (document.getElementById('tasksDashboardDiv')) document.getElementById('tasksDashboardDiv').style.display = 'flex';
+      if (document.getElementById('goalsDashboardDiv')) document.getElementById('goalsDashboardDiv').style.display = 'none';
+      renderTasksDashboard();
     } else {
-      // Load default presets
-      loadPreset(tabId === 'main' ? 'calmness' : 'importance');
+      if (document.getElementById('tasksDashboardDiv')) document.getElementById('tasksDashboardDiv').style.display = 'none';
+      if (document.getElementById('goalsDashboardDiv')) document.getElementById('goalsDashboardDiv').style.display = 'flex';
+      renderGoalsDashboard();
+      // Sync Libero assets dynamically when switching to Goals tab
+      syncLiberoLiquidAssets().catch(err => console.error("Libero sync error:", err));
+    }
+  } else {
+    // Show diagram area elements (main tab)
+    document.getElementById('myDiagramDiv').style.display = 'block';
+    const hud = document.getElementById('hudToolbar');
+    if (hud) hud.style.display = '';
+    const sidebar = document.getElementById('inspectorSidebar');
+    if (sidebar) sidebar.style.display = '';
+    const mainEl = document.querySelector('main');
+    if (mainEl) mainEl.style.gridTemplateColumns = '';
+    
+    if (document.getElementById('tasksDashboardDiv')) document.getElementById('tasksDashboardDiv').style.display = 'none';
+    if (document.getElementById('goalsDashboardDiv')) document.getElementById('goalsDashboardDiv').style.display = 'none';
+
+    // Load the model
+    if (myDiagram) {
+      const saveKey = 'mindmap_auto_save_main';
+      let savedModel = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
+
+      if (savedModel) {
+        try {
+          const loadedModel = go.Model.fromJson(savedModel);
+          loadedModel.linkFromPortIdProperty = "fromPort";
+          loadedModel.linkToPortIdProperty = "toPort";
+          migrateNodeData(loadedModel.nodeDataArray);
+          myDiagram.model = loadedModel;
+          myDiagram.layoutDiagram(true);
+          myDiagram.commandHandler.zoomToFit();
+        } catch (e) {
+          console.error("Failed to load saved model, loading preset", e);
+          loadPreset('calmness');
+        }
+      } else {
+        loadPreset('calmness');
+      }
     }
   }
 }
@@ -1738,3 +2351,1326 @@ function addWorkPlanTask(type) {
   input.value = '';
   renderTaskList(type);
 }
+
+// ----------------------------------------------------
+// Centralized Tasks Dashboard Implementations
+// ----------------------------------------------------
+
+// Retrieve all weekly and monthly tasks from the active mind map
+function getAllTasks() {
+  const tasks = [];
+  
+  // Get main model data
+  let mainNodeData = [];
+  if (activeTab === 'main' && myDiagram) {
+    mainNodeData = myDiagram.model.nodeDataArray;
+  } else {
+    let saved = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        mainNodeData = parsed.nodeDataArray || [];
+      } catch (e) {}
+    } else {
+      mainNodeData = presets.calmness.nodes;
+    }
+  }
+
+  // Helper to extract tasks from a node data list
+  const extract = (dataArray, source) => {
+    dataArray.forEach(node => {
+      if (node.isGoal !== true) return;
+      const nodeKey = node.key;
+      const nodeText = node.text || "בועה ללא שם";
+      const nodeCompleted = !!node.completed;
+      const nodeMonthlyGoalDate = node.monthlyGoalDate || "";
+      const nodeWeeklyGoalDate = node.weeklyGoalDate || "";
+      
+      if (Array.isArray(node.monthlyTasks)) {
+        node.monthlyTasks.forEach((t, index) => {
+          tasks.push({
+            id: `${source}|monthly|${nodeKey}|${index}`,
+            type: 'monthly',
+            source: source,
+            nodeKey: nodeKey,
+            nodeText: nodeText,
+            nodeCompleted: nodeCompleted,
+            nodeMonthlyGoalDate: nodeMonthlyGoalDate,
+            taskIndex: index,
+            text: t.text,
+            completed: !!t.completed
+          });
+        });
+      }
+      
+      if (Array.isArray(node.weeklyTasks)) {
+        node.weeklyTasks.forEach((t, index) => {
+          tasks.push({
+            id: `${source}|weekly|${nodeKey}|${index}`,
+            type: 'weekly',
+            source: source,
+            nodeKey: nodeKey,
+            nodeText: nodeText,
+            nodeCompleted: nodeCompleted,
+            nodeWeeklyGoalDate: nodeWeeklyGoalDate,
+            taskIndex: index,
+            text: t.text,
+            completed: !!t.completed
+          });
+        });
+      }
+    });
+  };
+
+  extract(mainNodeData, 'main');
+  
+  return tasks;
+}
+
+// Toggle a task's completion status from the dashboard view
+function toggleDashboardTask(taskId, completed) {
+  const parts = taskId.split('|');
+  const source = parts[0];
+  const type = parts[1];
+  const nodeKey = parseInt(parts[2], 10);
+  const taskIndex = parseInt(parts[3], 10);
+  
+  if (myDiagram && lastActiveMapTab === source) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node) {
+      const taskList = type === 'monthly' ? node.monthlyTasks : node.weeklyTasks;
+      if (taskList && taskList[taskIndex]) {
+        myDiagram.startTransaction("toggle task from dashboard");
+        const newList = JSON.parse(JSON.stringify(taskList));
+        newList[taskIndex].completed = completed;
+        myDiagram.model.setDataProperty(node, type === 'monthly' ? "monthlyTasks" : "weeklyTasks", newList);
+        myDiagram.commitTransaction("toggle task from dashboard");
+        
+        // Update LocalStorage immediately
+        const saveKey = source === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+        localStorage.setItem(saveKey, myDiagram.model.toJson());
+      }
+    }
+  } else {
+    const saveKey = source === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+    let saved = localStorage.getItem(saveKey);
+    if (source === 'main' && !saved) {
+      saved = localStorage.getItem('mindmap_auto_save');
+    }
+    
+    if (!saved) {
+      const presetData = source === 'main' ? presets.calmness : presets.importance;
+      const model = new go.GraphLinksModel(presetData.nodes, presetData.links);
+      saved = model.toJson();
+    }
+    
+    if (saved) {
+      try {
+        const modelObj = JSON.parse(saved);
+        const node = modelObj.nodeDataArray.find(n => n.key === nodeKey);
+        if (node) {
+          const taskList = type === 'monthly' ? node.monthlyTasks : node.weeklyTasks;
+          if (taskList && taskList[taskIndex]) {
+            taskList[taskIndex].completed = completed;
+            localStorage.setItem(saveKey, JSON.stringify(modelObj));
+          }
+        }
+      } catch (e) {
+        console.error("Error toggling offline task", e);
+      }
+    }
+  }
+  
+  renderTasksDashboard();
+  renderGoalsDashboard();
+}
+
+// Delete a task directly from the dashboard view
+function deleteDashboardTask(taskId) {
+  if (!confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) return;
+
+  const parts = taskId.split('|');
+  const source = parts[0];
+  const type = parts[1];
+  const nodeKey = parseInt(parts[2], 10);
+  const taskIndex = parseInt(parts[3], 10);
+  
+  if (myDiagram && lastActiveMapTab === source) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node) {
+      const taskList = type === 'monthly' ? node.monthlyTasks : node.weeklyTasks;
+      if (taskList && taskList[taskIndex]) {
+        myDiagram.startTransaction("delete task from dashboard");
+        const newList = JSON.parse(JSON.stringify(taskList));
+        newList.splice(taskIndex, 1);
+        myDiagram.model.setDataProperty(node, type === 'monthly' ? "monthlyTasks" : "weeklyTasks", newList);
+        myDiagram.commitTransaction("delete task from dashboard");
+        
+        const saveKey = source === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+        localStorage.setItem(saveKey, myDiagram.model.toJson());
+      }
+    }
+  } else {
+    const saveKey = source === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+    let saved = localStorage.getItem(saveKey);
+    if (source === 'main' && !saved) {
+      saved = localStorage.getItem('mindmap_auto_save');
+    }
+    
+    if (!saved) {
+      const presetData = source === 'main' ? presets.calmness : presets.importance;
+      const model = new go.GraphLinksModel(presetData.nodes, presetData.links);
+      saved = model.toJson();
+    }
+    
+    if (saved) {
+      try {
+        const modelObj = JSON.parse(saved);
+        const node = modelObj.nodeDataArray.find(n => n.key === nodeKey);
+        if (node) {
+          const taskList = type === 'monthly' ? node.monthlyTasks : node.weeklyTasks;
+          if (taskList && taskList[taskIndex]) {
+            taskList.splice(taskIndex, 1);
+            localStorage.setItem(saveKey, JSON.stringify(modelObj));
+          }
+        }
+      } catch (e) {
+        console.error("Error deleting offline task", e);
+      }
+    }
+  }
+  
+  renderTasksDashboard();
+  renderGoalsDashboard();
+  showToast('המשימה נמחקה בהצלחה', 'success');
+}
+
+// Toggle a Goal Node's completion status directly from the dashboard view
+function toggleNodeCompletion(source, nodeKey, completed) {
+  if (myDiagram && lastActiveMapTab === source) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node) {
+      myDiagram.startTransaction("toggle node completion from dashboard");
+      myDiagram.model.setDataProperty(node, "completed", completed);
+      myDiagram.commitTransaction("toggle node completion from dashboard");
+      
+      const saveKey = source === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+      localStorage.setItem(saveKey, myDiagram.model.toJson());
+    }
+  } else {
+    const saveKey = source === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+    let saved = localStorage.getItem(saveKey);
+    if (source === 'main' && !saved) {
+      saved = localStorage.getItem('mindmap_auto_save');
+    }
+    
+    if (!saved) {
+      const presetData = source === 'main' ? presets.calmness : presets.importance;
+      const model = new go.GraphLinksModel(presetData.nodes, presetData.links);
+      saved = model.toJson();
+    }
+    
+    if (saved) {
+      try {
+        const modelObj = JSON.parse(saved);
+        const node = modelObj.nodeDataArray.find(n => n.key === nodeKey);
+        if (node) {
+          node.completed = completed;
+          localStorage.setItem(saveKey, JSON.stringify(modelObj));
+        }
+      } catch (e) {
+        console.error("Error toggling offline node completion", e);
+      }
+    }
+  }
+  
+  renderTasksDashboard();
+  renderGoalsDashboard();
+  showToast(completed ? 'בועת היעד סומנה כבוצעה' : 'בוטל סימון בועת היעד כבוצעה', 'success');
+}
+
+// Navigate to the target node's tab, select, and center it on canvas
+function jumpToNode(source, nodeKey) {
+  // Switch to the correct tab first
+  switchTab(source, true);
+  
+  // Wait for model swap to render, then select & center node
+  setTimeout(() => {
+    if (myDiagram) {
+      const node = myDiagram.findNodeForKey(nodeKey);
+      if (node) {
+        myDiagram.select(node);
+        myDiagram.centerRect(node.actualBounds);
+      }
+    }
+  }, 150);
+}
+
+// Render the aggregated tasks on the dashboard with filters & stats
+function renderTasksDashboard() {
+  const allTasks = getAllTasks();
+  
+  const mapFilter = document.getElementById('dashboardMapFilter').value;
+  const statusFilter = document.getElementById('dashboardStatusFilter').value;
+  const searchQuery = document.getElementById('dashboardSearchInput').value.trim().toLowerCase();
+  
+  // Filter list
+  const filteredTasks = allTasks.filter(task => {
+    if (mapFilter !== 'all' && task.source !== mapFilter) return false;
+    if (statusFilter === 'pending' && task.completed) return false;
+    if (statusFilter === 'completed' && !task.completed) return false;
+    if (searchQuery && !task.text.toLowerCase().includes(searchQuery) && !task.nodeText.toLowerCase().includes(searchQuery)) return false;
+    return true;
+  });
+
+  const monthlyTasks = filteredTasks.filter(t => t.type === 'monthly');
+  const weeklyTasks = filteredTasks.filter(t => t.type === 'weekly');
+  
+  // Calculate statistics matching the map filter
+  const mapFilteredAllTasks = allTasks.filter(t => mapFilter === 'all' || t.source === mapFilter);
+  
+  const allMonthly = mapFilteredAllTasks.filter(t => t.type === 'monthly');
+  const completedMonthly = allMonthly.filter(t => t.completed);
+  const allWeekly = mapFilteredAllTasks.filter(t => t.type === 'weekly');
+  const completedWeekly = allWeekly.filter(t => t.completed);
+
+  // Update Statistics UI
+  const monthlyStatsNum = document.getElementById('monthlyStatsNum');
+  if (monthlyStatsNum) monthlyStatsNum.textContent = `${completedMonthly.length}/${allMonthly.length}`;
+  const monthlyBar = document.getElementById('monthlyStatsBar');
+  if (monthlyBar) {
+    const monthlyPct = allMonthly.length > 0 ? (completedMonthly.length / allMonthly.length) * 100 : 0;
+    monthlyBar.style.width = `${monthlyPct}%`;
+  }
+
+  const weeklyStatsNum = document.getElementById('weeklyStatsNum');
+  if (weeklyStatsNum) weeklyStatsNum.textContent = `${completedWeekly.length}/${allWeekly.length}`;
+  const weeklyBar = document.getElementById('weeklyStatsBar');
+  if (weeklyBar) {
+    const weeklyPct = allWeekly.length > 0 ? (completedWeekly.length / allWeekly.length) * 100 : 0;
+    weeklyBar.style.width = `${weeklyPct}%`;
+  }
+
+  // Render columns
+  renderDashboardList('dashboardMonthlyList', monthlyTasks);
+  renderDashboardList('dashboardWeeklyList', weeklyTasks);
+}
+
+function renderDashboardList(containerId, tasks) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  
+  if (tasks.length === 0) {
+    container.innerHTML = `
+      <div class="no-tasks-placeholder">
+        <span>אין משימות להצגה</span>
+      </div>
+    `;
+    return;
+  }
+  
+  tasks.forEach(task => {
+    const item = document.createElement('div');
+    item.className = 'dashboard-task-item';
+    
+    // Left: checkbox and task text
+    const left = document.createElement('div');
+    left.className = 'task-item-left';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = task.completed;
+    checkbox.addEventListener('change', () => {
+      toggleDashboardTask(task.id, checkbox.checked);
+    });
+    
+    const span = document.createElement('span');
+    span.className = `task-text ${task.completed ? 'completed' : ''}`;
+    span.textContent = task.text;
+    
+    left.appendChild(checkbox);
+    left.appendChild(span);
+    
+    // Right: node badge, source tab label, delete button
+    const right = document.createElement('div');
+    right.className = 'task-item-right';
+    
+    // Origin Node Badge Wrapper (checkbox + badge)
+    const nodeBadgeWrapper = document.createElement('div');
+    nodeBadgeWrapper.className = 'node-link-badge';
+    nodeBadgeWrapper.style.display = 'flex';
+    nodeBadgeWrapper.style.alignItems = 'center';
+    nodeBadgeWrapper.style.gap = '6px';
+    nodeBadgeWrapper.style.padding = '3px 8px';
+    
+    // Goal node completed checkbox
+    const nodeCheckbox = document.createElement('input');
+    nodeCheckbox.type = 'checkbox';
+    nodeCheckbox.checked = task.nodeCompleted;
+    nodeCheckbox.title = task.nodeCompleted ? 'בועת היעד סומנה כבוצעה. לחץ לביטול' : 'לחץ כדי לסמן את בועת היעד כבוצעה';
+    nodeCheckbox.style.width = '12px';
+    nodeCheckbox.style.height = '12px';
+    nodeCheckbox.style.margin = '0';
+    nodeCheckbox.style.cursor = 'pointer';
+    nodeCheckbox.style.accentColor = 'var(--success-color)';
+    nodeCheckbox.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent triggering jumpToNode
+    });
+    nodeCheckbox.addEventListener('change', () => {
+      toggleNodeCompletion(task.source, task.nodeKey, nodeCheckbox.checked);
+    });
+    
+    // Origin Node Badge text
+    const nodeBadge = document.createElement('span');
+    nodeBadge.style.maxWidth = '100px';
+    nodeBadge.style.overflow = 'hidden';
+    nodeBadge.style.textOverflow = 'ellipsis';
+    nodeBadge.style.whiteSpace = 'nowrap';
+    nodeBadge.title = `לחץ כדי לעבור לבועה: ${task.nodeText}`;
+    nodeBadge.textContent = task.nodeText;
+    if (task.nodeCompleted) {
+      nodeBadge.style.textDecoration = 'line-through';
+      nodeBadge.style.opacity = '0.7';
+    }
+    nodeBadge.addEventListener('click', () => {
+      jumpToNode(task.source, task.nodeKey);
+    });
+    
+    nodeBadgeWrapper.appendChild(nodeCheckbox);
+    nodeBadgeWrapper.appendChild(nodeBadge);
+    
+    // Goal target date badge
+    let dateBadge = null;
+    const targetDate = task.type === 'monthly' ? task.nodeMonthlyGoalDate : task.nodeWeeklyGoalDate;
+    if (targetDate) {
+      const parts = targetDate.split('-');
+      if (parts.length === 3) {
+        const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        dateBadge = document.createElement('span');
+        dateBadge.className = 'date-badge';
+        dateBadge.innerHTML = `📅 יעד: ${formattedDate}`;
+      }
+    }
+    
+    const sourceBadge = document.createElement('span');
+    const sourceLabel = task.source === 'main' ? 'ראשי' : 'חשיבות';
+    sourceBadge.className = `source-badge ${task.source}`;
+    sourceBadge.textContent = sourceLabel;
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-task-btn';
+    deleteBtn.innerHTML = '&times;';
+    deleteBtn.title = 'מחק משימה';
+    deleteBtn.addEventListener('click', () => {
+      deleteDashboardTask(task.id);
+    });
+    
+    if (dateBadge) {
+      right.appendChild(dateBadge);
+    }
+    right.appendChild(nodeBadgeWrapper);
+    right.appendChild(sourceBadge);
+    right.appendChild(deleteBtn);
+    
+    item.appendChild(left);
+    item.appendChild(right);
+    
+    container.appendChild(item);
+  });
+}
+
+// Parse key safely helper
+function parseGoalNodeKey(val) {
+  if (val === null || val === undefined) return val;
+  const num = Number(val);
+  return isNaN(num) ? val : num;
+}
+
+// Reorder goal nodes order index and persist
+function reorderGoalNodes(fromKeyStr, toKeyStr) {
+  if (!myDiagram) return;
+
+  const fromKey = parseGoalNodeKey(fromKeyStr);
+  const toKey = parseGoalNodeKey(toKeyStr);
+
+  const mainNodeData = myDiagram.model.nodeDataArray;
+  const goalNodes = mainNodeData.filter(node => node.isGoal === true);
+
+  // Sort according to current order to find exact index positions
+  goalNodes.sort((a, b) => {
+    const orderA = a.dashboardOrder !== undefined ? a.dashboardOrder : 99999;
+    const orderB = b.dashboardOrder !== undefined ? b.dashboardOrder : 99999;
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.key || 0) - (b.key || 0);
+  });
+
+  const fromIndex = goalNodes.findIndex(n => n.key === fromKey);
+  const toIndex = goalNodes.findIndex(n => n.key === toKey);
+
+  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+
+  // Move element
+  const [draggedNode] = goalNodes.splice(fromIndex, 1);
+  goalNodes.splice(toIndex, 0, draggedNode);
+
+  // Apply new indices via GoJS model transaction
+  myDiagram.startTransaction("reorder goals");
+  goalNodes.forEach((node, idx) => {
+    myDiagram.model.setDataProperty(node, "dashboardOrder", idx);
+  });
+  myDiagram.commitTransaction("reorder goals");
+
+  // Force auto-save to local storage and DB
+  const currentModelStr = myDiagram.model.toJson();
+  localStorage.setItem('mindmap_auto_save_main', currentModelStr);
+  saveToDB('main', currentModelStr);
+
+  // Re-render
+  renderGoalsDashboard();
+}
+
+// Render the aggregated goals dashboard with progress and stats
+function renderGoalsDashboard() {
+  // Get main model data
+  let mainNodeData = [];
+  if (myDiagram && myDiagram.model) {
+    mainNodeData = myDiagram.model.nodeDataArray;
+  } else {
+    let saved = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        mainNodeData = parsed.nodeDataArray || [];
+      } catch (e) {}
+    } else {
+      mainNodeData = presets.calmness.nodes;
+    }
+  }
+
+  // Filter goal nodes
+  const goalNodes = mainNodeData.filter(node => node.isGoal === true);
+
+  // Sort goal nodes by dashboardOrder
+  goalNodes.sort((a, b) => {
+    const orderA = a.dashboardOrder !== undefined ? a.dashboardOrder : 99999;
+    const orderB = b.dashboardOrder !== undefined ? b.dashboardOrder : 99999;
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.key || 0) - (b.key || 0);
+  });
+
+  // Statistics calculation
+  const totalGoals = goalNodes.length;
+  const completedGoals = goalNodes.filter(node => !!node.completed).length;
+  
+  let totalTasks = 0;
+  let completedTasks = 0;
+  
+  goalNodes.forEach(node => {
+    if (Array.isArray(node.monthlyTasks)) {
+      totalTasks += node.monthlyTasks.length;
+      completedTasks += node.monthlyTasks.filter(t => !!t.completed).length;
+    }
+    if (Array.isArray(node.weeklyTasks)) {
+      totalTasks += node.weeklyTasks.length;
+      completedTasks += node.weeklyTasks.filter(t => !!t.completed).length;
+    }
+  });
+
+  // Update Stats UI
+  const goalsTotalNum = document.getElementById('goalsTotalNum');
+  if (goalsTotalNum) goalsTotalNum.textContent = totalGoals;
+
+  const goalsCompletedNum = document.getElementById('goalsCompletedNum');
+  if (goalsCompletedNum) goalsCompletedNum.textContent = `${completedGoals}/${totalGoals}`;
+
+  const goalsCompletedBar = document.getElementById('goalsCompletedBar');
+  if (goalsCompletedBar) {
+    const goalsCompletedPct = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0;
+    goalsCompletedBar.style.width = `${goalsCompletedPct}%`;
+  }
+
+  const goalsTasksProgressNum = document.getElementById('goalsTasksProgressNum');
+  if (goalsTasksProgressNum) {
+    const tasksPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    goalsTasksProgressNum.textContent = `${tasksPct}% (${completedTasks}/${totalTasks})`;
+  }
+
+  const goalsTasksProgressBar = document.getElementById('goalsTasksProgressBar');
+  if (goalsTasksProgressBar) {
+    const tasksPct = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    goalsTasksProgressBar.style.width = `${tasksPct}%`;
+  }
+
+  // Render Grid Cards
+  const container = document.getElementById('goalsGridContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (goalNodes.length === 0) {
+    container.innerHTML = `
+      <div class="no-goals-message glass-panel">
+        <h3>🎯 אין מטרות פעילות להצגה</h3>
+        <p>כדי להגדיר מטרה במערכת, לחץ לחיצה כפולה על בועה כלשהי במפת המוח כדי לפתוח את תוכנית העבודה שלה, או סמן את "הגדר כבועת יעד / מטרה" בלוח המידע הצדדי.</p>
+      </div>
+    `;
+    return;
+  }
+
+  goalNodes.forEach(node => {
+    const card = document.createElement('div');
+    card.className = 'goal-card glass-panel';
+    card.style.borderRight = `5px solid var(--accent-color)`;
+
+    // Make card draggable/droppable
+    card.setAttribute('data-key', node.key);
+    card.draggable = false;
+
+    // Drag events
+    card.addEventListener('dragstart', (e) => {
+      draggedGoalNodeKey = node.key;
+      card.classList.add('dragging');
+      const gridContainer = document.getElementById('goalsGridContainer');
+      if (gridContainer) gridContainer.classList.add('dragging-active');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(node.key));
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      card.draggable = false;
+      const gridContainer = document.getElementById('goalsGridContainer');
+      if (gridContainer) gridContainer.classList.remove('dragging-active');
+      
+      const allCards = document.querySelectorAll('.goal-card');
+      allCards.forEach(c => c.classList.remove('drag-over'));
+    });
+
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    card.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      if (draggedGoalNodeKey !== null && draggedGoalNodeKey !== node.key) {
+        card.classList.add('drag-over');
+      }
+    });
+
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('drag-over');
+    });
+
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const targetKey = node.key;
+      if (draggedGoalNodeKey !== null && draggedGoalNodeKey !== targetKey) {
+        reorderGoalNodes(draggedGoalNodeKey, targetKey);
+      }
+    });
+
+    // Header section
+    const header = document.createElement('div');
+    header.className = 'goal-card-header';
+
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'goal-card-header-left';
+
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'goal-card-drag-handle';
+    dragHandle.innerHTML = '⠿';
+    dragHandle.title = 'גרור לשינוי סדר המטרות';
+    
+    dragHandle.addEventListener('mousedown', () => {
+      card.draggable = true;
+    });
+    dragHandle.addEventListener('mouseup', () => {
+      card.draggable = false;
+    });
+
+    const goalCompletedCheck = document.createElement('input');
+    goalCompletedCheck.type = 'checkbox';
+    goalCompletedCheck.className = 'goal-card-completed-check';
+    goalCompletedCheck.checked = !!node.completed;
+    goalCompletedCheck.title = 'סמן מטרה זו כהושלמה/בוצעה';
+    goalCompletedCheck.addEventListener('change', () => {
+      toggleNodeCompletion('main', node.key, goalCompletedCheck.checked);
+    });
+
+    const title = document.createElement('h3');
+    title.className = `goal-card-title ${node.completed ? 'completed' : ''}`;
+    title.textContent = node.text || "בועה ללא שם";
+    title.title = node.text || "בועה ללא שם";
+
+    headerLeft.appendChild(dragHandle);
+    headerLeft.appendChild(goalCompletedCheck);
+    headerLeft.appendChild(title);
+
+    // Calculate tasks progress percentage
+    let nodeTotalTasks = 0;
+    let nodeCompletedTasks = 0;
+    if (Array.isArray(node.monthlyTasks)) {
+      nodeTotalTasks += node.monthlyTasks.length;
+      nodeCompletedTasks += node.monthlyTasks.filter(t => !!t.completed).length;
+    }
+    if (Array.isArray(node.weeklyTasks)) {
+      nodeTotalTasks += node.weeklyTasks.length;
+      nodeCompletedTasks += node.weeklyTasks.filter(t => !!t.completed).length;
+    }
+    const progPct = nodeTotalTasks > 0 ? Math.round((nodeCompletedTasks / nodeTotalTasks) * 100) : 0;
+
+    // Badge status in percentage
+    const badge = document.createElement('span');
+    badge.className = `goal-card-badge ${node.completed ? 'completed' : ''}`;
+    
+    if (node.isQuantitative) {
+      const targetVal = parseFloat(node.targetValue) || 0;
+      const currentVal = parseFloat(node.currentValue) || 0;
+      const quantPct = targetVal > 0 ? Math.min(Math.round((currentVal / targetVal) * 100), 100) : 0;
+      badge.textContent = `${quantPct}% מושלם`;
+      if (quantPct === 100) {
+        badge.classList.add('completed');
+      }
+    } else if (nodeTotalTasks > 0) {
+      badge.textContent = `${progPct}% מושלם`;
+      if (progPct === 100) {
+        badge.classList.add('completed');
+      }
+    } else {
+      badge.textContent = node.completed ? '✓ הושלמה' : 'פעילה';
+    }
+
+    // Toggle details button
+    const isInitiallyExpanded = expandedGoalKeys.has(node.key);
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'goal-card-toggle-btn';
+    toggleBtn.innerHTML = '▼';
+    if (isInitiallyExpanded) {
+      toggleBtn.classList.add('expanded');
+      toggleBtn.title = 'הסתר פרטים';
+      card.classList.add('expanded');
+    } else {
+      toggleBtn.title = 'הצג פרטים';
+    }
+
+    const headerRight = document.createElement('div');
+    headerRight.className = 'goal-card-header-right';
+    headerRight.appendChild(badge);
+
+    // If website link is set, render a shortcut button directly in the header
+    if (node.websiteLink) {
+      let linkUrl = node.websiteLink.trim();
+      if (linkUrl) {
+        if (!/^https?:\/\//i.test(linkUrl)) {
+          linkUrl = 'https://' + linkUrl;
+        }
+        
+        const headerLink = document.createElement('a');
+        headerLink.href = linkUrl;
+        headerLink.target = '_blank';
+        headerLink.className = 'goal-header-link';
+        headerLink.title = 'פתח קישור לאתר: ' + linkUrl;
+        headerLink.innerHTML = `<svg style="width:12px; height:12px; fill:var(--accent-color); display:inline-block; transition: fill 0.2s;" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>`;
+        headerLink.style.display = 'inline-flex';
+        headerLink.style.alignItems = 'center';
+        headerLink.style.justifyContent = 'center';
+        headerLink.style.width = '24px';
+        headerLink.style.height = '24px';
+        headerLink.style.borderRadius = '50%';
+        headerLink.style.background = 'rgba(255, 171, 0, 0.1)';
+        headerLink.style.border = '1px solid rgba(255, 171, 0, 0.2)';
+        headerLink.style.transition = 'all 0.2s';
+        
+        headerLink.addEventListener('mouseenter', () => {
+          headerLink.style.background = 'var(--accent-color)';
+          headerLink.querySelector('svg').style.fill = '#090d16';
+        });
+        headerLink.addEventListener('mouseleave', () => {
+          headerLink.style.background = 'rgba(255, 171, 0, 0.1)';
+          headerLink.querySelector('svg').style.fill = 'var(--accent-color)';
+        });
+        headerLink.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+        
+        headerRight.appendChild(headerLink);
+      }
+    }
+
+    headerRight.appendChild(toggleBtn);
+
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    card.appendChild(header);
+
+    // Calculate overall completion percentage for the main progress bar
+    let overallPct = 0;
+    if (node.isQuantitative) {
+      const targetVal = parseFloat(node.targetValue) || 0;
+      const currentVal = parseFloat(node.currentValue) || 0;
+      overallPct = targetVal > 0 ? Math.min(Math.round((currentVal / targetVal) * 100), 100) : 0;
+    } else if (nodeTotalTasks > 0) {
+      overallPct = progPct;
+    } else {
+      overallPct = node.completed ? 100 : 0;
+    }
+
+    // Create overall progress bar visible at all times (collapsed and expanded)
+    const mainProgress = document.createElement('div');
+    mainProgress.className = 'goal-card-main-progress';
+    mainProgress.title = `התקדמות כוללת: ${overallPct}%`;
+    
+    const mainProgressBar = document.createElement('div');
+    mainProgressBar.className = 'goal-card-main-progress-bar';
+    mainProgressBar.style.width = `${overallPct}%`;
+    if (overallPct === 100) {
+      mainProgressBar.classList.add('completed');
+    }
+    
+    mainProgress.appendChild(mainProgressBar);
+    card.appendChild(mainProgress);
+
+    // Create the collapsible details container
+    const detailsContainer = document.createElement('div');
+    detailsContainer.className = 'goal-card-details';
+    if (isInitiallyExpanded) {
+      detailsContainer.classList.add('expanded');
+    }
+
+    // Click to toggle expand/collapse
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = detailsContainer.classList.toggle('expanded');
+      card.classList.toggle('expanded', isExpanded);
+      toggleBtn.classList.toggle('expanded', isExpanded);
+      toggleBtn.title = isExpanded ? 'הסתר פרטים' : 'הצג פרטים';
+      
+      if (isExpanded) {
+        expandedGoalKeys.add(node.key);
+      } else {
+        expandedGoalKeys.delete(node.key);
+      }
+    });
+
+
+    // Body section (Structured Goals)
+    const body = document.createElement('div');
+    body.className = 'goal-card-body';
+
+    const addGoalDetail = (icon, label, value, date) => {
+      const item = document.createElement('div');
+      item.className = 'goal-detail-item';
+      
+      const lbl = document.createElement('div');
+      lbl.className = 'goal-detail-label';
+      lbl.innerHTML = `${icon} <strong>${label}:</strong>`;
+      
+      const val = document.createElement('div');
+      val.className = 'goal-detail-val';
+      let text = value || 'לא הוגדר';
+      if (date) {
+        const dateParts = date.split('-');
+        if (dateParts.length === 3) {
+          text += ` <span style="font-size: 0.75rem; color: var(--accent-color); font-weight: bold;">[יעד: ${dateParts[2]}/${dateParts[1]}/${dateParts[0]}]</span>`;
+        }
+      }
+      val.innerHTML = text;
+      
+      item.appendChild(lbl);
+      item.appendChild(val);
+      body.appendChild(item);
+    };
+
+    addGoalDetail('🏆', 'מטרת על', node.grandGoal);
+    addGoalDetail('📍', 'מטרת ביניים', node.milestoneGoal);
+    
+    // Clean up currentStatus display in quantitative vs general status
+    if (node.isQuantitative) {
+      const targetVal = parseFloat(node.targetValue) || 0;
+      const currentVal = parseFloat(node.currentValue) || 0;
+      const formattedTarget = targetVal.toLocaleString();
+      const formattedCurrent = currentVal.toLocaleString();
+      const unitStr = node.unit || '';
+      addGoalDetail('📌', 'סטטוס כמותי', `${formattedCurrent} מתוך ${formattedTarget} ${unitStr}`);
+    } else {
+      addGoalDetail('📌', 'סטטוס נוכחי', node.currentStatus);
+    }
+    
+    addGoalDetail('📅', 'יעד חודשי', node.monthlyGoal, node.monthlyGoalDate);
+    addGoalDetail('⚡', 'יעד שבועי', node.weeklyGoal, node.weeklyGoalDate);
+
+    if (node.websiteLink) {
+      let linkUrl = node.websiteLink.trim();
+      if (linkUrl) {
+        if (!/^https?:\/\//i.test(linkUrl)) {
+          linkUrl = 'https://' + linkUrl;
+        }
+        addGoalDetail('🔗', 'קישור לאתר', `<a href="${linkUrl}" target="_blank" class="goal-card-link-btn"><svg style="width:14px; height:14px; fill:currentColor; vertical-align:middle; margin-left:4px;" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>פתח קישור</a>`);
+      }
+    }
+
+    detailsContainer.appendChild(body);
+
+    // Render Quantitative Goal Progress Bar (if active)
+    if (node.isQuantitative) {
+      const targetVal = parseFloat(node.targetValue) || 0;
+      const currentVal = parseFloat(node.currentValue) || 0;
+      const quantPct = targetVal > 0 ? Math.min(Math.round((currentVal / targetVal) * 100), 100) : 0;
+      const unitStr = node.unit || '';
+
+      const quantDiv = document.createElement('div');
+      quantDiv.className = 'goal-card-progress quantitative-progress';
+      quantDiv.style.marginTop = '10px';
+      quantDiv.style.marginBottom = '10px';
+      quantDiv.style.padding = '12px';
+      quantDiv.style.borderRadius = 'var(--border-radius-sm)';
+      quantDiv.style.background = 'rgba(255, 179, 0, 0.04)';
+      quantDiv.style.border = '1px dashed rgba(255, 179, 0, 0.2)';
+
+      const qHeader = document.createElement('div');
+      qHeader.className = 'goal-progress-header';
+      const formattedTarget = targetVal.toLocaleString();
+      const formattedCurrent = currentVal.toLocaleString();
+      qHeader.innerHTML = `
+        <span style="color: var(--accent-color); font-weight: bold;">📊 התקדמות יעד כמותי:</span>
+        <strong>${formattedCurrent} / ${formattedTarget} ${unitStr} (${quantPct}%)</strong>
+      `;
+
+      const qBg = document.createElement('div');
+      qBg.className = 'stat-progress-bg';
+      
+      const qBar = document.createElement('div');
+      qBar.className = 'stat-progress-bar';
+      qBar.style.width = `${quantPct}%`;
+      qBar.style.background = 'linear-gradient(90deg, var(--accent-color) 0%, #10b981 100%)';
+
+      qBg.appendChild(qBar);
+      quantDiv.appendChild(qHeader);
+      quantDiv.appendChild(qBg);
+      detailsContainer.appendChild(quantDiv);
+    }
+
+    const progressDiv = document.createElement('div');
+    progressDiv.className = 'goal-card-progress';
+
+    const progHeader = document.createElement('div');
+    progHeader.className = 'goal-progress-header';
+    
+    progHeader.innerHTML = `
+      <span>משימות יעד:</span>
+      <strong>${nodeCompletedTasks}/${nodeTotalTasks} (${progPct}%)</strong>
+    `;
+
+    const progBg = document.createElement('div');
+    progBg.className = 'stat-progress-bg';
+    
+    const progBar = document.createElement('div');
+    progBar.className = 'stat-progress-bar';
+    progBar.style.width = `${progPct}%`;
+    if (node.completed || (nodeTotalTasks > 0 && nodeCompletedTasks === nodeTotalTasks)) {
+      progBar.style.background = '#10b981';
+    }
+
+    progBg.appendChild(progBar);
+    progressDiv.appendChild(progHeader);
+    progressDiv.appendChild(progBg);
+    detailsContainer.appendChild(progressDiv);
+
+    // Tasks checklist section inside the card
+    const tasksSection = document.createElement('div');
+    tasksSection.className = 'goal-card-tasks-checklist';
+    
+    // Monthly Tasks Header & List
+    if (Array.isArray(node.monthlyTasks) && node.monthlyTasks.length > 0) {
+      const monthlyHeader = document.createElement('h4');
+      monthlyHeader.className = 'goal-tasks-subheader';
+      monthlyHeader.innerHTML = '📅 משימות חודשיות';
+      tasksSection.appendChild(monthlyHeader);
+      
+      node.monthlyTasks.forEach((task, index) => {
+        const item = document.createElement('label');
+        item.className = `goal-task-check-item ${task.completed ? 'completed' : ''}`;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !!task.completed;
+        
+        const taskId = `main|monthly|${node.key}|${index}`;
+        checkbox.addEventListener('change', () => {
+          toggleDashboardTask(taskId, checkbox.checked);
+        });
+        
+        const span = document.createElement('span');
+        span.textContent = task.text;
+        
+        item.appendChild(checkbox);
+        item.appendChild(span);
+        tasksSection.appendChild(item);
+      });
+    }
+
+    // Weekly Tasks Header & List
+    if (Array.isArray(node.weeklyTasks) && node.weeklyTasks.length > 0) {
+      const weeklyHeader = document.createElement('h4');
+      weeklyHeader.className = 'goal-tasks-subheader';
+      weeklyHeader.innerHTML = '⚡ משימות שבועיות';
+      tasksSection.appendChild(weeklyHeader);
+      
+      node.weeklyTasks.forEach((task, index) => {
+        const item = document.createElement('label');
+        item.className = `goal-task-check-item ${task.completed ? 'completed' : ''}`;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !!task.completed;
+        
+        const taskId = `main|weekly|${node.key}|${index}`;
+        checkbox.addEventListener('change', () => {
+          toggleDashboardTask(taskId, checkbox.checked);
+        });
+        
+        const span = document.createElement('span');
+        span.textContent = task.text;
+        
+        item.appendChild(checkbox);
+        item.appendChild(span);
+        tasksSection.appendChild(item);
+      });
+    }
+
+    if (tasksSection.children.length > 0) {
+      detailsContainer.appendChild(tasksSection);
+    }
+
+    // Footer containing Jump to Node button
+    const footer = document.createElement('div');
+    footer.className = 'goal-card-footer';
+
+    const navBtn = document.createElement('button');
+    navBtn.className = 'btn btn-sm btn-nav';
+    navBtn.innerHTML = '🔍 נווט לבועה במפה';
+    navBtn.addEventListener('click', () => {
+      jumpToNode('main', node.key);
+    });
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-sm btn-edit';
+    editBtn.innerHTML = '✏️ ערוך מטרה';
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (myDiagram) {
+        const actualNode = myDiagram.findNodeForKey(node.key);
+        if (actualNode) {
+          openWorkPlanModal(actualNode);
+        }
+      }
+    });
+
+    footer.appendChild(editBtn);
+    footer.appendChild(navBtn);
+    detailsContainer.appendChild(footer);
+
+    card.appendChild(detailsContainer);
+
+
+    container.appendChild(card);
+  });
+}
+
+// Copy selected/filtered tasks to clipboard formatted for iPhone Reminders
+function copyTasksToClipboard() {
+  const allTasks = getAllTasks();
+  
+  const mapFilter = document.getElementById('dashboardMapFilter').value;
+  const statusFilter = document.getElementById('dashboardStatusFilter').value;
+  const searchQuery = document.getElementById('dashboardSearchInput').value.trim().toLowerCase();
+  
+  const filteredTasks = allTasks.filter(task => {
+    if (mapFilter !== 'all' && task.source !== mapFilter) return false;
+    if (statusFilter === 'pending' && task.completed) return false;
+    if (statusFilter === 'completed' && !task.completed) return false;
+    if (searchQuery && !task.text.toLowerCase().includes(searchQuery) && !task.nodeText.toLowerCase().includes(searchQuery)) return false;
+    return true;
+  });
+
+  if (filteredTasks.length === 0) {
+    showToast('אין משימות להעתקה בהתאם לסינון הנוכחי', 'warning');
+    return;
+  }
+
+  let text = '';
+  const monthly = filteredTasks.filter(t => t.type === 'monthly');
+  const weekly = filteredTasks.filter(t => t.type === 'weekly');
+  
+  if (monthly.length > 0) {
+    text += `📅 משימות חודשיות:\n`;
+    monthly.forEach(t => {
+      const status = t.completed ? '✓' : ' ';
+      const source = t.source === 'main' ? 'ראשי' : 'חשיבות';
+      let dateStr = '';
+      if (t.nodeMonthlyGoalDate) {
+        const parts = t.nodeMonthlyGoalDate.split('-');
+        if (parts.length === 3) {
+          dateStr = ` [יעד: ${parts[2]}/${parts[1]}/${parts[0]}]`;
+        }
+      }
+      text += `- [${status}] ${t.text} (מטרה: ${t.nodeText}) [שמש: ${source}]${dateStr}\n`;
+    });
+    text += `\n`;
+  }
+  
+  if (weekly.length > 0) {
+    text += `⚡ משימות שבועיות:\n`;
+    weekly.forEach(t => {
+      const status = t.completed ? '✓' : ' ';
+      const source = t.source === 'main' ? 'ראשי' : 'חשיבות';
+      let dateStr = '';
+      if (t.nodeWeeklyGoalDate) {
+        const parts = t.nodeWeeklyGoalDate.split('-');
+        if (parts.length === 3) {
+          dateStr = ` [יעד: ${parts[2]}/${parts[1]}/${parts[0]}]`;
+        }
+      }
+      text += `- [${status}] ${t.text} (מטרה: ${t.nodeText}) [שמש: ${source}]${dateStr}\n`;
+    });
+  }
+
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    showToast('הרשימה הועתקה ללוח! הדבק אותה ישירות באפליקציית התזכורות באייפון', 'success');
+  }).catch(err => {
+    // Fallback
+    const textarea = document.createElement('textarea');
+    textarea.value = text.trim();
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      showToast('הרשימה הועתקה ללוח! הדבק אותה ישירות באפליקציית התזכורות באייפון', 'success');
+    } catch (e) {
+      showToast('שגיאה בהעתקת הרשימה', 'danger');
+    }
+    document.body.removeChild(textarea);
+  });
+}
+
+// Export tasks as a .ics (iCalendar) file with VTODOs for iOS Reminders import
+function exportTasksToIcs() {
+  const allTasks = getAllTasks();
+  
+  const mapFilter = document.getElementById('dashboardMapFilter').value;
+  const statusFilter = document.getElementById('dashboardStatusFilter').value;
+  const searchQuery = document.getElementById('dashboardSearchInput').value.trim().toLowerCase();
+  
+  const filteredTasks = allTasks.filter(task => {
+    if (mapFilter !== 'all' && task.source !== mapFilter) return false;
+    if (statusFilter === 'pending' && task.completed) return false;
+    if (statusFilter === 'completed' && !task.completed) return false;
+    if (searchQuery && !task.text.toLowerCase().includes(searchQuery) && !task.nodeText.toLowerCase().includes(searchQuery)) return false;
+    return true;
+  });
+
+  if (filteredTasks.length === 0) {
+    showToast('אין משימות לייצוא בהתאם לסינון הנוכחי', 'warning');
+    return;
+  }
+
+  let icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Antigravity//Mindmap Tasks//EN',
+    'CALSCALE:GREGORIAN'
+  ];
+
+  filteredTasks.forEach((t) => {
+    icsContent.push('BEGIN:VTODO');
+    icsContent.push(`UID:${t.source}-${t.type}-${t.nodeKey}-${t.taskIndex}@mindmap`);
+    
+    // Status
+    if (t.completed) {
+      icsContent.push('STATUS:COMPLETED');
+    } else {
+      icsContent.push('STATUS:NEEDS-ACTION');
+    }
+    
+    // Summary & Description
+    icsContent.push(`SUMMARY:${t.text}`);
+    const sourceLabel = t.source === 'main' ? 'ראשי' : 'למה זה חשוב';
+    icsContent.push(`DESCRIPTION:מטרה: ${t.nodeText} | שמש: ${sourceLabel}`);
+    
+    // Due Date (if target date is set)
+    const targetDate = t.type === 'monthly' ? t.nodeMonthlyGoalDate : t.nodeWeeklyGoalDate;
+    if (targetDate) {
+      const cleanDate = targetDate.replace(/-/g, '');
+      if (cleanDate.length === 8) {
+        icsContent.push(`DUE;VALUE=DATE:${cleanDate}`);
+      }
+    }
+    
+    icsContent.push('END:VTODO');
+  });
+
+  icsContent.push('END:VCALENDAR');
+  
+  const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  
+  // Try to use Web Share API first on iOS so the user can directly send/share it to Reminders
+  if (navigator.share && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+    try {
+      const file = new File([blob], "tasks.ics", { type: "text/calendar" });
+      navigator.share({
+        files: [file],
+        title: 'משימות מ-Horizon',
+        text: 'ייצוא משימות לתזכורות באייפון'
+      }).then(() => {
+        showToast('הקובץ שותף בהצלחה', 'success');
+      }).catch(err => {
+        triggerDownload(url, "tasks.ics");
+      });
+      return;
+    } catch (e) {
+      triggerDownload(url, "tasks.ics");
+    }
+  } else {
+    triggerDownload(url, "tasks.ics");
+  }
+}
+
+function triggerDownload(url, filename) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  showToast('קובץ תזכורות (.ics) הורד בהצלחה', 'success');
+}
+
+// Save active tab mindmap model string to database
+function saveToDB(tabId, modelStr) {
+  fetch('/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tabId: tabId, model: modelStr })
+  })
+  .then(res => {
+    if (!res.ok) throw new Error();
+    console.log("Saved to database successfully");
+  })
+  .catch(err => {
+    console.error("Failed to save to DB:", err);
+  });
+}
+
+// Load mindmap data from database on startup
+function loadFromDB() {
+  return fetch('/api/load')
+    .then(res => {
+      if (!res.ok) throw new Error();
+      return res.json();
+    })
+    .then(dbData => {
+      if (dbData.main) {
+        localStorage.setItem('mindmap_auto_save_main', dbData.main);
+      }
+      console.log("Loaded data from DB successfully");
+    })
+    .catch(err => {
+      console.log("Failed to load from DB, using LocalStorage");
+    });
+}
+
+// Sync liquid assets value from Libero Firebase project
+async function syncLiberoLiquidAssets() {
+  try {
+    const API_KEY = 'AIzaSyC-r8CfozRW9d5Vdvr4S6Uhic3m-oR4eLM';
+    const PROJECT_ID = 'libero-6e823';
+    const UID = 'J9e1YnJtdxQgyMvK1e2TC5qpBsK2';
+
+    // 1. Sign in anonymously
+    const authUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
+    const authRes = await fetch(authUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnSecureToken: true })
+    });
+    const authData = await authRes.json();
+    const idToken = authData.idToken;
+    if (!idToken) {
+      throw new Error('Failed to get anonymous authentication token from Firebase Auth');
+    }
+
+    // 2. Fetch financial document from Firestore REST API
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}/data/financial`;
+    const dataRes = await fetch(firestoreUrl, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!dataRes.ok) {
+      const errText = await dataRes.text();
+      throw new Error(`Firestore query failed: ${dataRes.status} ${errText}`);
+    }
+
+    const doc = await dataRes.json();
+    
+    // Parse assets list and compute liquid sum (isLocked === false)
+    const assetsRaw = doc.fields?.assets?.arrayValue?.values || [];
+    let liquidSum = 0;
+    
+    assetsRaw.forEach((item) => {
+      const fields = item.mapValue?.fields;
+      if (!fields) return;
+      
+      const valStr = fields.value ? (fields.value.integerValue || fields.value.doubleValue || '0') : '0';
+      const value = parseFloat(valStr);
+      const isLocked = fields.isLocked ? fields.isLocked.booleanValue : false;
+      
+      if (!isLocked) {
+        liquidSum += value;
+      }
+    });
+
+    // Check if we found assets and if the value is different from the target node currentValue
+    if (liquidSum > 0 && myDiagram) {
+      let updated = false;
+      myDiagram.startTransaction("sync libero liquid assets");
+      
+      myDiagram.model.nodeDataArray.forEach((nodeData) => {
+        // Target specifically node key -16 or any goal node displaying 9,000,000 as the targetValue
+        if (nodeData.key === -16 || nodeData.text === '9,000,000' || nodeData.targetValue === 9000000) {
+          if (nodeData.currentValue !== liquidSum) {
+            myDiagram.model.setDataProperty(nodeData, "currentValue", liquidSum);
+            updated = true;
+          }
+        }
+      });
+      
+      myDiagram.commitTransaction("sync libero liquid assets");
+      
+      if (updated) {
+        // Save the updated model immediately to LocalStorage and db.json
+        const currentModelStr = myDiagram.model.toJson();
+        localStorage.setItem('mindmap_auto_save_main', currentModelStr);
+        saveToDB('main', currentModelStr);
+        
+        // Re-render dashboard views
+        if (activeTab === 'goals') {
+          renderGoalsDashboard();
+        }
+        console.log(`Synced Tom's Libero liquid assets: ${liquidSum} ₪`);
+      }
+    }
+  } catch (err) {
+    console.error("Libero assets sync error:", err);
+  }
+}
+
+
+
