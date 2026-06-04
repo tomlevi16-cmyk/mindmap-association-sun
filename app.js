@@ -1092,9 +1092,12 @@ document.getElementById('addNodeBranchBtn').addEventListener('click', () => {
 // UI elements event bindings (Zoom, Undo/Redo, Presets, Export/Import)
 function setupUIEventListeners() {
   // Preset selector
-  document.getElementById('presetSelect').addEventListener('change', (e) => {
-    loadPreset(e.target.value);
-  });
+  const presetSelect = document.getElementById('presetSelect');
+  if (presetSelect) {
+    presetSelect.addEventListener('change', (e) => {
+      loadPreset(e.target.value);
+    });
+  }
 
   // Export JSON
   document.getElementById('exportJsonBtn').addEventListener('click', () => {
@@ -1181,7 +1184,8 @@ function setupUIEventListeners() {
         myDiagram.commandHandler.zoomToFit();
 
         // Clear preset selector
-        document.getElementById('presetSelect').value = '';
+        const presetSelect = document.getElementById('presetSelect');
+        if (presetSelect) presetSelect.value = '';
         showToast('המפה נטענה בהצלחה', 'success');
 
         // Save imported model to LocalStorage and DB
