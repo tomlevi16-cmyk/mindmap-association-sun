@@ -1144,7 +1144,7 @@ kbd {
 }
 
 .column-header h3 {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
@@ -1200,7 +1200,7 @@ kbd {
 }
 
 .task-text {
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   line-height: 1.4;
   color: var(--text-primary);
 }
@@ -1217,7 +1217,7 @@ kbd {
 }
 
 .node-link-badge {
-  font-size: 0.75rem !important;
+  font-size: 0.85rem !important;
   padding: 4px 10px !important;
   border-radius: 20px !important;
   background: rgba(255, 255, 255, 0.05) !important;
@@ -1252,7 +1252,7 @@ kbd {
 }
 
 .source-badge {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 600;
@@ -1296,7 +1296,7 @@ kbd {
 }
 
 .date-badge {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 600;
