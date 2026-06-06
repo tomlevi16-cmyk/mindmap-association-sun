@@ -2010,4 +2010,50 @@ kbd {
   border-color: #0ea5e9 !important;
 }
 
+/* Goal Card Title Hover Page Button */
+.goal-title-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 189, 248, 0.15) !important;
+  border: 1px solid rgba(56, 189, 248, 0.3) !important;
+  color: #38bdf8 !important;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.goal-title-page-btn:hover {
+  background: #38bdf8 !important;
+  color: #090d16 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+}
+
+.goal-card-header:hover .goal-title-page-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+[data-theme="light"] .goal-title-page-btn {
+  background: rgba(14, 165, 233, 0.08) !important;
+  border-color: rgba(14, 165, 233, 0.2) !important;
+  color: #0e7194 !important;
+}
+
+[data-theme="light"] .goal-title-page-btn:hover {
+  background: #0ea5e9 !important;
+  color: #ffffff !important;
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.4) !important;
+}
+
 

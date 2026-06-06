@@ -3104,9 +3104,19 @@ function renderGoalsDashboard() {
     title.textContent = node.text || "בועה ללא שם";
     title.title = node.text || "בועה ללא שם";
 
+    const titlePageBtn = document.createElement('button');
+    titlePageBtn.className = 'goal-title-page-btn';
+    titlePageBtn.innerHTML = '📄';
+    titlePageBtn.title = 'פתח עמוד מטרה';
+    titlePageBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openGoalPage(node.key);
+    });
+
     headerLeft.appendChild(dragHandle);
     headerLeft.appendChild(goalCompletedCheck);
     headerLeft.appendChild(title);
+    headerLeft.appendChild(titlePageBtn);
 
     // Calculate tasks progress percentage
     let nodeTotalTasks = 0;
