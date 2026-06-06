@@ -3063,6 +3063,14 @@ function renderGoalsDashboard() {
       }
     });
 
+    // Double click event to open dedicated goal page
+    card.addEventListener('dblclick', (e) => {
+      if (e.target.closest('input, button, a, svg, path')) {
+        return;
+      }
+      openGoalPage(node.key);
+    });
+
     // Header section
     const header = document.createElement('div');
     header.className = 'goal-card-header';
