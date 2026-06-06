@@ -1478,6 +1478,7 @@ kbd {
   text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
+  cursor: pointer;
 }
 
 .goal-card-title.completed {
