@@ -1190,9 +1190,9 @@ function setupUIEventListeners() {
 
         // Save imported model to LocalStorage and DB
         const modelStr = newModel.toJson();
-        const saveKey = activeTab === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+        const saveKey = 'mindmap_auto_save_main';
         localStorage.setItem(saveKey, modelStr);
-        saveToDB(activeTab, modelStr);
+        saveToDB('main', modelStr);
       } catch (err) {
         showToast('שגיאה: ' + err.message, 'error');
         console.error("Import error:", err);
@@ -1611,6 +1611,8 @@ function setupUIEventListeners() {
     tabGoals.addEventListener('click', () => {
       if (activeTab !== 'goals') {
         switchTab('goals');
+      } else {
+        closeGoalPage();
       }
     });
   }
@@ -1642,6 +1644,73 @@ function setupUIEventListeners() {
   const copyBtn = document.getElementById('dashboardCopyBtn');
   if (copyBtn) {
     copyBtn.addEventListener('click', copyTasksToClipboard);
+  }
+
+  // Single Goal Details Page & Timeline listeners
+  const backBtn = document.getElementById('backToDashboardBtn');
+  if (backBtn) {
+    backBtn.addEventListener('click', closeGoalPage);
+  }
+
+  const addEvtBtn = document.getElementById('addTimelineEventBtn');
+  if (addEvtBtn) {
+    addEvtBtn.addEventListener('click', () => {
+      const form = document.getElementById('addTimelineEventForm');
+      if (form) {
+        if (form.style.display === 'none') {
+          form.style.display = 'flex';
+          const titleIn = document.getElementById('timelineEventTitle');
+          if (titleIn) titleIn.focus();
+        } else {
+          cancelTimelineEventForm();
+        }
+      }
+    });
+  }
+
+  const cancelEvtBtn = document.getElementById('cancelTimelineEventBtn');
+  if (cancelEvtBtn) {
+    cancelEvtBtn.addEventListener('click', cancelTimelineEventForm);
+  }
+
+  const saveEvtBtn = document.getElementById('saveTimelineEventBtn');
+  if (saveEvtBtn) {
+    saveEvtBtn.addEventListener('click', saveTimelineEvent);
+  }
+
+  // Keyboard navigation inside timeline event form
+  const titleInput = document.getElementById('timelineEventTitle');
+  if (titleInput) {
+    titleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveTimelineEvent();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelTimelineEventForm();
+      }
+    });
+  }
+  const dateInput = document.getElementById('timelineEventDate');
+  if (dateInput) {
+    dateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveTimelineEvent();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelTimelineEventForm();
+      }
+    });
+  }
+  const descInput = document.getElementById('timelineEventDesc');
+  if (descInput) {
+    descInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelTimelineEventForm();
+      }
+    });
   }
 }
 
@@ -1954,10 +2023,10 @@ function scheduleAutoSave() {
   autoSaveTimeout = setTimeout(() => {
     if (myDiagram) {
       const modelStr = myDiagram.model.toJson();
-      const saveKey = activeTab === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+      const saveKey = 'mindmap_auto_save_main';
       localStorage.setItem(saveKey, modelStr);
       localStorage.setItem('mindmap_active_tab', activeTab);
-      saveToDB(activeTab, modelStr);
+      saveToDB('main', modelStr);
     }
   }, 1000); // 1-second debounce delay
 }
@@ -2227,11 +2296,26 @@ function switchTab(tabId, saveCurrent = true) {
     } else {
       if (document.getElementById('tasksDashboardDiv')) document.getElementById('tasksDashboardDiv').style.display = 'none';
       if (document.getElementById('goalsDashboardDiv')) document.getElementById('goalsDashboardDiv').style.display = 'flex';
+      
+      // Reset single goal page view to default when entering Goals tab
+      const singlePage = document.getElementById('singleGoalPageDiv');
+      if (singlePage) singlePage.style.display = 'none';
+      const mainHeader = document.querySelector('#goalsDashboardDiv > .dashboard-header');
+      if (mainHeader) mainHeader.style.display = 'flex';
+      const gridContainer = document.getElementById('goalsGridContainer');
+      if (gridContainer) gridContainer.style.display = 'grid';
+      window.currentGoalPageNodeKey = null;
+
       renderGoalsDashboard();
       // Sync Libero assets dynamically when switching to Goals tab
       syncLiberoLiquidAssets().catch(err => console.error("Libero sync error:", err));
     }
   } else {
+    // Hide single goal page view just in case
+    const singlePage = document.getElementById('singleGoalPageDiv');
+    if (singlePage) singlePage.style.display = 'none';
+    window.currentGoalPageNodeKey = null;
+
     // Show diagram area elements (main tab)
     document.getElementById('myDiagramDiv').style.display = 'block';
     const hud = document.getElementById('hudToolbar');
@@ -2879,6 +2963,10 @@ function renderGoalsDashboard() {
       totalTasks += node.weeklyTasks.length;
       completedTasks += node.weeklyTasks.filter(t => !!t.completed).length;
     }
+    if (Array.isArray(node.timelineEvents)) {
+      totalTasks += node.timelineEvents.length;
+      completedTasks += node.timelineEvents.filter(e => !!e.completed).length;
+    }
   });
 
   // Update Stats UI
@@ -3022,6 +3110,10 @@ function renderGoalsDashboard() {
     if (Array.isArray(node.weeklyTasks)) {
       nodeTotalTasks += node.weeklyTasks.length;
       nodeCompletedTasks += node.weeklyTasks.filter(t => !!t.completed).length;
+    }
+    if (Array.isArray(node.timelineEvents)) {
+      nodeTotalTasks += node.timelineEvents.length;
+      nodeCompletedTasks += node.timelineEvents.filter(e => !!e.completed).length;
     }
     const progPct = nodeTotalTasks > 0 ? Math.round((nodeCompletedTasks / nodeTotalTasks) * 100) : 0;
 
@@ -3348,15 +3440,16 @@ function renderGoalsDashboard() {
       detailsContainer.appendChild(tasksSection);
     }
 
-    // Footer containing Jump to Node button
+    // Footer containing Jump to Node, Edit, and Page buttons
     const footer = document.createElement('div');
     footer.className = 'goal-card-footer';
 
-    const navBtn = document.createElement('button');
-    navBtn.className = 'btn btn-sm btn-nav';
-    navBtn.innerHTML = '🔍 נווט לבועה במפה';
-    navBtn.addEventListener('click', () => {
-      jumpToNode('main', node.key);
+    const pageBtn = document.createElement('button');
+    pageBtn.className = 'btn btn-sm btn-page';
+    pageBtn.innerHTML = '📄 עמוד מטרה';
+    pageBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openGoalPage(node.key);
     });
 
     const editBtn = document.createElement('button');
@@ -3372,6 +3465,14 @@ function renderGoalsDashboard() {
       }
     });
 
+    const navBtn = document.createElement('button');
+    navBtn.className = 'btn btn-sm btn-nav';
+    navBtn.innerHTML = '🔍 נווט לבועה במפה';
+    navBtn.addEventListener('click', () => {
+      jumpToNode('main', node.key);
+    });
+
+    footer.appendChild(pageBtn);
     footer.appendChild(editBtn);
     footer.appendChild(navBtn);
     detailsContainer.appendChild(footer);
@@ -3674,6 +3775,392 @@ async function syncLiberoLiquidAssets() {
   } catch (err) {
     console.error("Libero assets sync error:", err);
   }
+}
+
+// Dedicated Goal Details Page and Timeline Helper Functions
+
+function openGoalPage(nodeKey) {
+  let node = null;
+  if (myDiagram && myDiagram.model) {
+    node = myDiagram.model.findNodeDataForKey(nodeKey);
+  }
+  if (!node) {
+    let saved = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        node = (parsed.nodeDataArray || []).find(n => n.key === nodeKey);
+      } catch (e) {}
+    }
+  }
+  if (!node) {
+    showToast('לא נמצאו נתוני מטרה', 'error');
+    return;
+  }
+
+  window.currentGoalPageNodeKey = nodeKey;
+
+  // Hide the main dashboard header and cards grid
+  const mainHeader = document.querySelector('#goalsDashboardDiv > .dashboard-header');
+  if (mainHeader) mainHeader.style.display = 'none';
+
+  const gridContainer = document.getElementById('goalsGridContainer');
+  if (gridContainer) gridContainer.style.display = 'none';
+
+  // Show the single goal page div
+  const singlePage = document.getElementById('singleGoalPageDiv');
+  if (singlePage) singlePage.style.display = 'flex';
+
+  // Render the goal details and timeline
+  renderGoalPage(node);
+}
+
+function closeGoalPage() {
+  window.currentGoalPageNodeKey = null;
+
+  const singlePage = document.getElementById('singleGoalPageDiv');
+  if (singlePage) singlePage.style.display = 'none';
+
+  const mainHeader = document.querySelector('#goalsDashboardDiv > .dashboard-header');
+  if (mainHeader) mainHeader.style.display = 'flex';
+
+  const gridContainer = document.getElementById('goalsGridContainer');
+  if (gridContainer) gridContainer.style.display = 'grid';
+
+  // Rerender goals dashboard
+  renderGoalsDashboard();
+}
+
+function renderGoalPage(node) {
+  const pageTitle = document.getElementById('goalPageTitle');
+  if (pageTitle) {
+    pageTitle.textContent = node.text || "מטרה ללא שם";
+  }
+
+  renderGoalPageDetails(node);
+  renderGoalTimeline(node);
+
+  // Calculate completions
+  let totalTasks = 0;
+  let completedTasks = 0;
+  if (Array.isArray(node.monthlyTasks)) {
+    totalTasks += node.monthlyTasks.length;
+    completedTasks += node.monthlyTasks.filter(t => !!t.completed).length;
+  }
+  if (Array.isArray(node.weeklyTasks)) {
+    totalTasks += node.weeklyTasks.length;
+    completedTasks += node.weeklyTasks.filter(t => !!t.completed).length;
+  }
+  if (Array.isArray(node.timelineEvents)) {
+    totalTasks += node.timelineEvents.length;
+    completedTasks += node.timelineEvents.filter(e => !!e.completed).length;
+  }
+  
+  const tasksPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : (node.completed ? 100 : 0);
+
+  const pctText = document.getElementById('goalPageTasksPct');
+  if (pctText) {
+    pctText.textContent = `${tasksPct}% (${completedTasks}/${totalTasks})`;
+  }
+
+  const progressBar = document.getElementById('goalPageTasksBar');
+  if (progressBar) {
+    progressBar.style.width = `${tasksPct}%`;
+  }
+}
+
+function renderGoalPageDetails(node) {
+  const detailsDiv = document.getElementById('goalPageDetails');
+  if (!detailsDiv) return;
+  detailsDiv.innerHTML = '';
+
+  const addGoalDetail = (icon, label, value, date) => {
+    const item = document.createElement('div');
+    item.className = 'goal-detail-item';
+    
+    const lbl = document.createElement('div');
+    lbl.className = 'goal-detail-label';
+    lbl.innerHTML = `${icon} <strong>${label}:</strong>`;
+    
+    const val = document.createElement('div');
+    val.className = 'goal-detail-val';
+    let text = value || 'לא הוגדר';
+    if (date) {
+      const dateParts = date.split('-');
+      if (dateParts.length === 3) {
+        text += ` <span style="font-size: 0.75rem; color: var(--accent-color); font-weight: bold;">[יעד: ${dateParts[2]}/${dateParts[1]}/${dateParts[0]}]</span>`;
+      }
+    }
+    val.innerHTML = text;
+    
+    item.appendChild(lbl);
+    item.appendChild(val);
+    detailsDiv.appendChild(item);
+  };
+
+  addGoalDetail('🏆', 'מטרת על', node.grandGoal);
+  addGoalDetail('📍', 'מטרת ביניים', node.milestoneGoal);
+  
+  if (node.isQuantitative) {
+    const targetVal = parseFloat(node.targetValue) || 0;
+    const currentVal = parseFloat(node.currentValue) || 0;
+    const formattedTarget = targetVal.toLocaleString();
+    const formattedCurrent = currentVal.toLocaleString();
+    const unitStr = node.unit || '';
+    addGoalDetail('📌', 'סטטוס כמותי', `${formattedCurrent} מתוך ${formattedTarget} ${unitStr}`);
+  } else {
+    addGoalDetail('📌', 'סטטוס נוכחי', node.currentStatus);
+  }
+  
+  addGoalDetail('📅', 'יעד חודשי', node.monthlyGoal, node.monthlyGoalDate);
+  addGoalDetail('⚡', 'יעד שבועי', node.weeklyGoal, node.weeklyGoalDate);
+
+  if (node.websiteLink) {
+    let linkUrl = node.websiteLink.trim();
+    if (linkUrl) {
+      if (!/^https?:\/\//i.test(linkUrl)) {
+        linkUrl = 'https://' + linkUrl;
+      }
+      addGoalDetail('🔗', 'קישור לאתר', `<a href="${linkUrl}" target="_blank" class="goal-card-link-btn"><svg style="width:14px; height:14px; fill:currentColor; vertical-align:middle; margin-left:4px;" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>פתח קישור</a>`);
+    }
+  }
+}
+
+function formatDateHebrew(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+function renderGoalTimeline(node) {
+  const list = document.getElementById('timelineEventsList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const events = Array.isArray(node.timelineEvents) ? [...node.timelineEvents] : [];
+  
+  // Sort chronologically
+  events.sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(a.date) - new Date(b.date);
+  });
+
+  if (events.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; padding: 30px; color: var(--text-secondary); background: rgba(255,255,255,0.01); border: 1px dashed var(--border-glass); border-radius: 12px; margin-top: 10px;">
+        <p style="margin: 0; font-size: 0.9rem;">אין תת-מטרות או אירועים בציר הזמן למטרה זו.</p>
+        <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--accent-color);">לחץ על "הוסף תת-מטרה" כדי להתחיל לתכנן את ציר הזמן שלך!</p>
+      </div>
+    `;
+    return;
+  }
+
+  events.forEach(event => {
+    const item = document.createElement('div');
+    item.className = `timeline-item ${event.completed ? 'completed' : ''}`;
+
+    const dot = document.createElement('div');
+    dot.className = `timeline-dot ${event.completed ? 'completed' : ''}`;
+
+    const content = document.createElement('div');
+    content.className = 'timeline-content';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'flex-start';
+    header.style.flexWrap = 'wrap';
+    header.style.gap = '8px';
+
+    const title = document.createElement('h4');
+    title.style.margin = '0';
+    title.style.fontSize = '1.05rem';
+    title.style.fontWeight = '700';
+    title.style.color = '#ffffff';
+    title.textContent = event.title;
+
+    const dateSpan = document.createElement('span');
+    dateSpan.style.fontSize = '0.75rem';
+    dateSpan.style.color = 'var(--accent-color)';
+    dateSpan.style.fontWeight = 'bold';
+    dateSpan.textContent = event.date ? formatDateHebrew(event.date) : 'ללא תאריך';
+
+    header.appendChild(title);
+    header.appendChild(dateSpan);
+    content.appendChild(header);
+
+    if (event.desc) {
+      const desc = document.createElement('p');
+      desc.style.margin = '4px 0 8px 0';
+      desc.style.fontSize = '0.85rem';
+      desc.style.color = 'var(--text-secondary)';
+      desc.style.lineHeight = '1.4';
+      desc.textContent = event.desc;
+      content.appendChild(desc);
+    }
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.gap = '8px';
+    actions.style.marginTop = '8px';
+    actions.style.borderTop = '1px solid rgba(255,255,255,0.05)';
+    actions.style.paddingTop = '8px';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'btn btn-sm';
+    toggleBtn.style.background = 'rgba(255,255,255,0.05)';
+    toggleBtn.style.border = '1px solid var(--border-glass)';
+    toggleBtn.style.padding = '4px 8px';
+    toggleBtn.style.borderRadius = '6px';
+    toggleBtn.style.fontSize = '0.75rem';
+    toggleBtn.style.display = 'flex';
+    toggleBtn.style.alignItems = 'center';
+    toggleBtn.style.gap = '4px';
+    toggleBtn.innerHTML = `<span>${event.completed ? '❌ סמן כלא בוצע' : '✓ סמן כבוצע'}</span>`;
+    toggleBtn.addEventListener('click', () => {
+      toggleTimelineEvent(node.key, event.id);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-sm';
+    deleteBtn.style.background = 'rgba(239,68,68,0.08)';
+    deleteBtn.style.border = '1px solid rgba(239,68,68,0.2)';
+    deleteBtn.style.color = '#f87171';
+    deleteBtn.style.padding = '4px 8px';
+    deleteBtn.style.borderRadius = '6px';
+    deleteBtn.style.fontSize = '0.75rem';
+    deleteBtn.style.display = 'flex';
+    deleteBtn.style.alignItems = 'center';
+    deleteBtn.style.gap = '4px';
+    deleteBtn.innerHTML = `<span>🗑️ מחק</span>`;
+    deleteBtn.addEventListener('click', () => {
+      deleteTimelineEvent(node.key, event.id);
+    });
+
+    actions.appendChild(toggleBtn);
+    actions.appendChild(deleteBtn);
+    content.appendChild(actions);
+
+    item.appendChild(dot);
+    item.appendChild(content);
+
+    list.appendChild(item);
+  });
+}
+
+function addTimelineEvent(nodeKey, title, date, desc) {
+  if (!title.trim()) {
+    showToast('נא להזין שם לתת-המטרה', 'warning');
+    return;
+  }
+
+  if (myDiagram && myDiagram.model) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node) {
+      myDiagram.startTransaction('add timeline event');
+      
+      const events = Array.isArray(node.timelineEvents) ? [...node.timelineEvents] : [];
+      const newEvent = {
+        id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        title: title.trim(),
+        date: date || '',
+        desc: desc.trim() || '',
+        completed: false
+      };
+      
+      events.push(newEvent);
+      myDiagram.model.setDataProperty(node, 'timelineEvents', events);
+      myDiagram.commitTransaction('add timeline event');
+
+      renderGoalPage(node);
+      showToast('תת-המטרה נוספה בהצלחה', 'success');
+    }
+  }
+}
+
+function toggleTimelineEvent(nodeKey, eventId) {
+  if (myDiagram && myDiagram.model) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node && Array.isArray(node.timelineEvents)) {
+      myDiagram.startTransaction('toggle timeline event');
+      const updatedEvents = node.timelineEvents.map(evt => {
+        if (evt.id === eventId) {
+          return { ...evt, completed: !evt.completed };
+        }
+        return evt;
+      });
+      myDiagram.model.setDataProperty(node, 'timelineEvents', updatedEvents);
+      myDiagram.commitTransaction('toggle timeline event');
+      
+      renderGoalPage(node);
+    }
+  }
+}
+
+function deleteTimelineEvent(nodeKey, eventId) {
+  if (confirm('האם אתה בטוח שברצונך למחוק תת-מטרה זו?')) {
+    if (myDiagram && myDiagram.model) {
+      const node = myDiagram.model.findNodeDataForKey(nodeKey);
+      if (node && Array.isArray(node.timelineEvents)) {
+        myDiagram.startTransaction('delete timeline event');
+        const updatedEvents = node.timelineEvents.filter(evt => evt.id !== eventId);
+        myDiagram.model.setDataProperty(node, 'timelineEvents', updatedEvents);
+        myDiagram.commitTransaction('delete timeline event');
+        
+        renderGoalPage(node);
+        showToast('תת-המטרה נמחקה', 'info');
+      }
+    }
+  }
+}
+
+function saveTimelineEvent() {
+  const nodeKey = window.currentGoalPageNodeKey;
+  if (nodeKey === null || nodeKey === undefined) return;
+
+  const titleInput = document.getElementById('timelineEventTitle');
+  const dateInput = document.getElementById('timelineEventDate');
+  const descInput = document.getElementById('timelineEventDesc');
+
+  if (!titleInput) return;
+
+  const title = titleInput.value.trim();
+  const date = dateInput ? dateInput.value : '';
+  const desc = descInput ? descInput.value.trim() : '';
+
+  if (!title) {
+    showToast('נא להזין שם לתת-המטרה', 'warning');
+    return;
+  }
+
+  addTimelineEvent(nodeKey, title, date, desc);
+
+  // Clear and hide form
+  titleInput.value = '';
+  if (dateInput) dateInput.value = '';
+  if (descInput) descInput.value = '';
+  
+  const form = document.getElementById('addTimelineEventForm');
+  if (form) form.style.display = 'none';
+}
+
+function cancelTimelineEventForm() {
+  const titleInput = document.getElementById('timelineEventTitle');
+  const dateInput = document.getElementById('timelineEventDate');
+  const descInput = document.getElementById('timelineEventDesc');
+  
+  if (titleInput) titleInput.value = '';
+  if (dateInput) dateInput.value = '';
+  if (descInput) descInput.value = '';
+
+  const form = document.getElementById('addTimelineEventForm');
+  if (form) form.style.display = 'none';
 }
 
 

@@ -1880,4 +1880,134 @@ kbd {
   border-color: var(--accent-color) !important;
 }
 
+/* Goal Details Page Content Grid */
+.goal-page-content {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 20px;
+  align-items: start;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .goal-page-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Timeline Container Styles */
+.timeline-container {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.timeline-line {
+  position: absolute;
+  right: 29px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+}
+
+[data-theme="light"] .timeline-line {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.timeline-item {
+  display: flex;
+  gap: 16px;
+  position: relative;
+  padding-right: 48px; /* Room for the line and dot */
+  transition: opacity 0.3s ease;
+}
+
+.timeline-dot {
+  position: absolute;
+  right: 24px;
+  top: 20px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 3px solid var(--accent-color);
+  box-shadow: 0 0 10px var(--accent-color);
+  z-index: 2;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.timeline-dot.completed {
+  border-color: var(--success-color) !important;
+  box-shadow: 0 0 10px var(--success-color) !important;
+}
+
+.timeline-content {
+  flex: 1;
+  padding: 16px 20px !important;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.timeline-content:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="light"] .timeline-content {
+  background: rgba(255, 255, 255, 0.45) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .timeline-content:hover {
+  background: rgba(255, 255, 255, 0.65) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.timeline-item.completed {
+  opacity: 0.6;
+}
+
+.timeline-item.completed .timeline-content h4 {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.goal-card-footer .btn-page {
+  background: rgba(56, 189, 248, 0.08) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+}
+
+.goal-card-footer .btn-page:hover {
+  background: #38bdf8 !important;
+  color: #090d16 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25) !important;
+}
+
+[data-theme="light"] .goal-card-footer .btn-page {
+  background: rgba(14, 165, 233, 0.06) !important;
+  border-color: rgba(14, 165, 233, 0.2) !important;
+  color: #0e7194 !important;
+}
+
+[data-theme="light"] .goal-card-footer .btn-page:hover {
+  background: #0ea5e9 !important;
+  color: #ffffff !important;
+  border-color: #0ea5e9 !important;
+}
+
 

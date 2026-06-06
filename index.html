@@ -176,6 +176,74 @@
         <div class="goals-grid" id="goalsGridContainer">
           <!-- Rendered goal cards will go here dynamically -->
         </div>
+
+        <!-- Dedicated Goal Details Page with Sub-goals Timeline -->
+        <div id="singleGoalPageDiv" style="display: none; flex-direction: column; gap: 20px; width: 100%;">
+          <div class="dashboard-header" style="justify-content: flex-start; align-items: flex-start; flex-direction: column; gap: 8px;">
+            <button id="backToDashboardBtn" class="btn btn-sm" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem;">
+              <span>➡️</span> <span>חזור ללוח מטרות</span>
+            </button>
+            <div class="dashboard-title-area" style="margin-top: 10px;">
+              <h2 id="goalPageTitle" style="font-size: 1.8rem; font-weight: 800; color: #ffffff; margin: 0 0 4px 0;">שם המטרה</h2>
+              <p style="margin: 0;">ניהול תוכנית עבודה מפורטת וציר זמן להשגת המטרה</p>
+            </div>
+          </div>
+
+          <div class="goal-page-content">
+            <!-- Right Column: Goal Summary & Details -->
+            <div class="dashboard-column glass-panel" style="gap: 20px; height: auto;">
+              <div class="column-header">
+                <h3>🎯 פרטי המטרה</h3>
+              </div>
+              
+              <div id="goalPageDetails" class="goal-card-body" style="gap: 16px;">
+                <!-- Dynamically populated goal details -->
+              </div>
+              
+              <div class="goal-card-progress" style="margin-top: 10px;">
+                <div class="goal-progress-header" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px;">
+                  <span>משימות ותת-מטרות שהושלמו:</span>
+                  <strong id="goalPageTasksPct" style="color: var(--accent-color);">0%</strong>
+                </div>
+                <div class="stat-progress-bg" style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+                  <div id="goalPageTasksBar" class="stat-progress-bar" style="width: 0%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent-color) 0%, #10b981 100%); transition: width 0.4s ease;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Left Column: Timeline -->
+            <div class="dashboard-column glass-panel" style="gap: 20px; height: auto;">
+              <div class="column-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0;">📅 ציר זמן ותת-מטרות</h3>
+                <button id="addTimelineEventBtn" class="btn btn-sm primary" style="padding: 6px 12px; font-size: 0.8rem;">
+                  <span>➕</span> <span>הוסף תת-מטרה</span>
+                </button>
+              </div>
+
+              <!-- Add Event Form -->
+              <div id="addTimelineEventForm" class="glass-panel" style="display: none; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass);">
+                <h4 style="margin: 0; font-size: 0.95rem; color: var(--accent-color); font-weight: 700;">תת-מטרה חדשה</h4>
+                <div style="display: grid; grid-template-columns: 1fr 150px; gap: 12px;">
+                  <input type="text" id="timelineEventTitle" placeholder="שם תת-המטרה (למשל: השקת גרסת בטא)" style="padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; color: #ffffff; font-size: 0.85rem; outline: none;">
+                  <input type="date" id="timelineEventDate" style="padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; color: #ffffff; font-size: 0.85rem; outline: none;">
+                </div>
+                <textarea id="timelineEventDesc" placeholder="תיאור/הערות (אופציונלי)" rows="2" style="padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; color: #ffffff; font-size: 0.85rem; font-family: inherit; resize: none; outline: none;"></textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                  <button id="cancelTimelineEventBtn" class="btn btn-sm" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem;">ביטול</button>
+                  <button id="saveTimelineEventBtn" class="btn btn-sm primary" style="padding: 6px 12px; border-radius: 8px; font-size: 0.8rem;">שמור</button>
+                </div>
+              </div>
+
+              <!-- Vertical Timeline Container -->
+              <div class="timeline-container" style="position: relative; padding: 10px 0 20px 0; width: 100%;">
+                <div class="timeline-line"></div>
+                <div id="timelineEventsList" style="display: flex; flex-direction: column; gap: 20px; position: relative;">
+                  <!-- Timeline items rendered dynamically -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Floating HUD toolbar (Zoom, Undo, Redo, Help) -->
