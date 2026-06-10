@@ -4283,6 +4283,7 @@ function cancelTimelineEventForm() {
     form.style.display = 'none';
     const formHeader = form.querySelector('h4');
     if (formHeader) formHeader.textContent = 'תת-מטרה חדשה';
+  }
 }
 
 function setTimelineLayout(mode) {
