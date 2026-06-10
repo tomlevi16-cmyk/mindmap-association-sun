@@ -2190,3 +2190,39 @@ kbd {
   width: 100% !important;
   z-index: 2 !important;
 }
+
+/* Vertical down arrow at the bottom of the timeline line */
+.timeline-container::after {
+  content: "▼" !important;
+  position: absolute !important;
+  right: 25px !important;
+  bottom: -16px !important;
+  font-size: 10px !important;
+  color: var(--border-glass) !important;
+  z-index: 1 !important;
+}
+
+.timeline-container.horizontal::after {
+  display: none !important;
+}
+
+/* Horizontal left arrowheads pointing to the next items */
+.timeline-container.horizontal .timeline-item::before {
+  content: "◀" !important;
+  position: absolute !important;
+  top: 17px !important; /* Aligned with top: 25px line center */
+  left: -24px !important;
+  font-size: 10px !important;
+  color: var(--border-glass) !important;
+  z-index: 2 !important;
+  line-height: 1 !important;
+  transition: all 0.3s ease !important;
+}
+
+.timeline-container.horizontal .timeline-item.completed::before {
+  color: var(--success-color) !important;
+}
+
+.timeline-container.horizontal .timeline-item:last-child::before {
+  display: none !important;
+}

@@ -4293,6 +4293,15 @@ function setTimelineLayout(mode) {
   const container = document.querySelector('.timeline-container');
   const vertBtn = document.getElementById('timelineLayoutVerticalBtn');
   const horizBtn = document.getElementById('timelineLayoutHorizontalBtn');
+  const indicator = document.getElementById('timelineDirectionIndicator');
+  
+  if (indicator) {
+    if (mode === 'horizontal') {
+      indicator.textContent = '(סדר כרונולוגי מימין לשמאל ◀)';
+    } else {
+      indicator.textContent = '(סדר כרונולוגי מלמעלה למטה ⬇️)';
+    }
+  }
   
   if (container) {
     if (mode === 'horizontal') {

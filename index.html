@@ -214,7 +214,10 @@
             <!-- Left Column: Timeline -->
             <div class="dashboard-column glass-panel" style="gap: 20px; height: auto;">
               <div class="column-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin: 0;">📅 ציר זמן ותת-מטרות</h3>
+                <h3 style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                  <span>📅 ציר זמן ותת-מטרות</span>
+                  <span id="timelineDirectionIndicator" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: normal;">(סדר כרונולוגי מלמעלה למטה ⬇️)</span>
+                </h3>
                 <div style="display: flex; align-items: center; gap: 12px;">
                   <div class="timeline-layout-toggle" style="display: inline-flex; background: rgba(255,255,255,0.05); padding: 2px; border-radius: 8px; border: 1px solid var(--border-glass);">
                     <button id="timelineLayoutVerticalBtn" class="btn btn-xs active" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: none; background: var(--accent-color); color: #090d16; cursor: pointer; transition: all 0.2s ease;" title="ציר זמן אנכי">
