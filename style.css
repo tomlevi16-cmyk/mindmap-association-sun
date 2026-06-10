@@ -78,7 +78,7 @@ body {
   background-color: var(--bg-primary);
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(245, 166, 35, 0.04) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
+    radial-gradient(circle at 90% 80%, rgba(245, 166, 35, 0.015) 0%, transparent 50%);
   background-attachment: fixed;
   color: var(--text-primary);
   font-family: 'Rubik', 'Heebo', system-ui, -apple-system, sans-serif;
@@ -93,7 +93,7 @@ body {
 [data-theme="light"] body {
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(217, 119, 6, 0.03) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.02) 0%, transparent 50%) !important;
+    radial-gradient(circle at 90% 80%, rgba(217, 119, 6, 0.01) 0%, transparent 50%) !important;
 }
 
 /* Glassmorphism Panel Common Utility */
@@ -962,7 +962,7 @@ kbd {
   /* Premium Apple glass background backdrop radial glow */
   background-image: 
     radial-gradient(circle at 12% 18%, rgba(245, 166, 35, 0.07) 0%, transparent 40%),
-    radial-gradient(circle at 88% 82%, rgba(168, 85, 247, 0.06) 0%, transparent 45%);
+    radial-gradient(circle at 88% 82%, rgba(245, 166, 35, 0.02) 0%, transparent 45%);
   background-attachment: fixed;
   gap: 20px;
 }
@@ -970,7 +970,7 @@ kbd {
 [data-theme="light"] .tasks-dashboard-container {
   background-image: 
     radial-gradient(circle at 12% 18%, rgba(217, 119, 6, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 88% 82%, rgba(109, 40, 217, 0.04) 0%, transparent 45%) !important;
+    radial-gradient(circle at 88% 82%, rgba(217, 119, 6, 0.01) 0%, transparent 45%) !important;
 }
 
 .dashboard-header {
@@ -1301,9 +1301,15 @@ kbd {
 }
 
 .source-badge.main {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="light"] .source-badge.main {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
 }
 
 .source-badge.importance {
@@ -2029,28 +2035,28 @@ kbd {
 }
 
 .goal-card-footer .btn-page {
-  background: rgba(56, 189, 248, 0.08) !important;
-  color: #38bdf8 !important;
-  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  background: rgba(245, 166, 35, 0.08) !important;
+  color: var(--accent-color) !important;
+  border: 1px solid rgba(245, 166, 35, 0.2) !important;
 }
 
 .goal-card-footer .btn-page:hover {
-  background: #38bdf8 !important;
+  background: var(--accent-color) !important;
   color: #090d16 !important;
-  border-color: #38bdf8 !important;
-  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25) !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 4px 12px rgba(245, 166, 35, 0.25) !important;
 }
 
 [data-theme="light"] .goal-card-footer .btn-page {
-  background: rgba(14, 165, 233, 0.06) !important;
-  border-color: rgba(14, 165, 233, 0.2) !important;
-  color: #0e7194 !important;
+  background: rgba(217, 119, 6, 0.06) !important;
+  border-color: rgba(217, 119, 6, 0.2) !important;
+  color: var(--accent-color) !important;
 }
 
 [data-theme="light"] .goal-card-footer .btn-page:hover {
-  background: #0ea5e9 !important;
+  background: var(--accent-color) !important;
   color: #ffffff !important;
-  border-color: #0ea5e9 !important;
+  border-color: var(--accent-color) !important;
 }
 
 /* Goal Card Title Hover Page Button */
@@ -2058,9 +2064,9 @@ kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(56, 189, 248, 0.15) !important;
-  border: 1px solid rgba(56, 189, 248, 0.3) !important;
-  color: #38bdf8 !important;
+  background: rgba(245, 166, 35, 0.15) !important;
+  border: 1px solid rgba(245, 166, 35, 0.3) !important;
+  color: var(--accent-color) !important;
   width: 24px;
   height: 24px;
   border-radius: 6px;
@@ -2075,10 +2081,10 @@ kbd {
 }
 
 .goal-title-page-btn:hover {
-  background: #38bdf8 !important;
+  background: var(--accent-color) !important;
   color: #090d16 !important;
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 8px rgba(245, 166, 35, 0.4) !important;
 }
 
 .goal-card-header:hover .goal-title-page-btn {
@@ -2087,16 +2093,16 @@ kbd {
 }
 
 [data-theme="light"] .goal-title-page-btn {
-  background: rgba(14, 165, 233, 0.08) !important;
-  border-color: rgba(14, 165, 233, 0.2) !important;
-  color: #0e7194 !important;
+  background: rgba(217, 119, 6, 0.08) !important;
+  border-color: rgba(217, 119, 6, 0.2) !important;
+  color: var(--accent-color) !important;
 }
 
 [data-theme="light"] .goal-title-page-btn:hover {
-  background: #0ea5e9 !important;
+  background: var(--accent-color) !important;
   color: #ffffff !important;
-  border-color: #0ea5e9 !important;
-  box-shadow: 0 0 8px rgba(14, 165, 233, 0.4) !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.4) !important;
 }
 
 
