@@ -215,9 +215,19 @@
             <div class="dashboard-column glass-panel" style="gap: 20px; height: auto;">
               <div class="column-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">📅 ציר זמן ותת-מטרות</h3>
-                <button id="addTimelineEventBtn" class="btn btn-sm primary" style="padding: 6px 12px; font-size: 0.8rem;">
-                  <span>➕</span> <span>הוסף תת-מטרה</span>
-                </button>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div class="timeline-layout-toggle" style="display: inline-flex; background: rgba(255,255,255,0.05); padding: 2px; border-radius: 8px; border: 1px solid var(--border-glass);">
+                    <button id="timelineLayoutVerticalBtn" class="btn btn-xs active" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: none; background: var(--accent-color); color: #090d16; cursor: pointer; transition: all 0.2s ease;" title="ציר זמן אנכי">
+                      <span>↕️ אנכי</span>
+                    </button>
+                    <button id="timelineLayoutHorizontalBtn" class="btn btn-xs" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease;" title="ציר זמן אופקי">
+                      <span>↔️ אופקי</span>
+                    </button>
+                  </div>
+                  <button id="addTimelineEventBtn" class="btn btn-sm primary" style="padding: 6px 12px; font-size: 0.8rem;">
+                    <span>➕</span> <span>הוסף תת-מטרה</span>
+                  </button>
+                </div>
               </div>
 
               <!-- Add Event Form -->

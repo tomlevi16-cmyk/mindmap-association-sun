@@ -18,6 +18,7 @@ let lastActiveMapTab = 'main';
 let draggedGoalNodeKey = null;
 let expandedGoalKeys = new Set();
 let editingTimelineEventId = null;
+let timelineLayoutMode = 'vertical';
 
 // Curated modern HSL colors (Fill / Stroke pairs)
 const colorPresets = [
@@ -125,6 +126,11 @@ function initApp() {
     setTheme(savedTheme);
   } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
     setTheme('light');
+  }
+
+  const savedTimelineLayout = localStorage.getItem('timeline_layout_mode');
+  if (savedTimelineLayout) {
+    timelineLayoutMode = savedTimelineLayout;
   }
 
   // Setup color grids in sidebar
@@ -1687,6 +1693,17 @@ function setupUIEventListeners() {
   const saveEvtBtn = document.getElementById('saveTimelineEventBtn');
   if (saveEvtBtn) {
     saveEvtBtn.addEventListener('click', saveTimelineEvent);
+  }
+
+  const layoutVertBtn = document.getElementById('timelineLayoutVerticalBtn');
+  const layoutHorizBtn = document.getElementById('timelineLayoutHorizontalBtn');
+  if (layoutVertBtn && layoutHorizBtn) {
+    layoutVertBtn.addEventListener('click', () => {
+      setTimelineLayout('vertical');
+    });
+    layoutHorizBtn.addEventListener('click', () => {
+      setTimelineLayout('horizontal');
+    });
   }
 
   // Keyboard navigation inside timeline event form
@@ -3863,6 +3880,7 @@ function renderGoalPage(node) {
 
   renderGoalPageDetails(node);
   renderGoalTimeline(node);
+  setTimelineLayout(timelineLayoutMode);
 
   // Calculate completions
   let totalTasks = 0;
@@ -4265,6 +4283,42 @@ function cancelTimelineEventForm() {
     form.style.display = 'none';
     const formHeader = form.querySelector('h4');
     if (formHeader) formHeader.textContent = 'תת-מטרה חדשה';
+}
+
+function setTimelineLayout(mode) {
+  timelineLayoutMode = mode;
+  localStorage.setItem('timeline_layout_mode', mode);
+  
+  const container = document.querySelector('.timeline-container');
+  const vertBtn = document.getElementById('timelineLayoutVerticalBtn');
+  const horizBtn = document.getElementById('timelineLayoutHorizontalBtn');
+  
+  if (container) {
+    if (mode === 'horizontal') {
+      container.classList.add('horizontal');
+    } else {
+      container.classList.remove('horizontal');
+    }
+  }
+  
+  if (vertBtn && horizBtn) {
+    if (mode === 'horizontal') {
+      horizBtn.style.background = 'var(--accent-color)';
+      horizBtn.style.color = '#090d16';
+      horizBtn.classList.add('active');
+      
+      vertBtn.style.background = 'transparent';
+      vertBtn.style.color = 'var(--text-secondary)';
+      vertBtn.classList.remove('active');
+    } else {
+      vertBtn.style.background = 'var(--accent-color)';
+      vertBtn.style.color = '#090d16';
+      vertBtn.classList.add('active');
+      
+      horizBtn.style.background = 'transparent';
+      horizBtn.style.color = 'var(--text-secondary)';
+      horizBtn.classList.remove('active');
+    }
   }
 }
 
