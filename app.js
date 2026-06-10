@@ -17,6 +17,7 @@ let panModeBySpace = false;
 let lastActiveMapTab = 'main';
 let draggedGoalNodeKey = null;
 let expandedGoalKeys = new Set();
+let editingTimelineEventId = null;
 
 // Curated modern HSL colors (Fill / Stroke pairs)
 const colorPresets = [
@@ -1658,8 +1659,18 @@ function setupUIEventListeners() {
       const form = document.getElementById('addTimelineEventForm');
       if (form) {
         if (form.style.display === 'none') {
-          form.style.display = 'flex';
+          editingTimelineEventId = null;
           const titleIn = document.getElementById('timelineEventTitle');
+          const dateIn = document.getElementById('timelineEventDate');
+          const descIn = document.getElementById('timelineEventDesc');
+          if (titleIn) titleIn.value = '';
+          if (dateIn) dateIn.value = '';
+          if (descIn) descIn.value = '';
+          
+          const formHeader = form.querySelector('h4');
+          if (formHeader) formHeader.textContent = 'תת-מטרה חדשה';
+
+          form.style.display = 'flex';
           if (titleIn) titleIn.focus();
         } else {
           cancelTimelineEventForm();
@@ -4040,6 +4051,22 @@ function renderGoalTimeline(node) {
       toggleTimelineEvent(node.key, event.id);
     });
 
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-sm';
+    editBtn.style.background = 'rgba(245,166,35,0.08)';
+    editBtn.style.border = '1px solid rgba(245,166,35,0.2)';
+    editBtn.style.color = 'var(--accent-color)';
+    editBtn.style.padding = '4px 8px';
+    editBtn.style.borderRadius = '6px';
+    editBtn.style.fontSize = '0.75rem';
+    editBtn.style.display = 'flex';
+    editBtn.style.alignItems = 'center';
+    editBtn.style.gap = '4px';
+    editBtn.innerHTML = `<span>✏️ ערוך</span>`;
+    editBtn.addEventListener('click', () => {
+      openEditTimelineEvent(node.key, event.id);
+    });
+
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn btn-sm';
     deleteBtn.style.background = 'rgba(239,68,68,0.08)';
@@ -4057,6 +4084,7 @@ function renderGoalTimeline(node) {
     });
 
     actions.appendChild(toggleBtn);
+    actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
     content.appendChild(actions);
 
@@ -4065,6 +4093,55 @@ function renderGoalTimeline(node) {
 
     list.appendChild(item);
   });
+}
+
+function openEditTimelineEvent(nodeKey, eventId) {
+  if (myDiagram && myDiagram.model) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node && Array.isArray(node.timelineEvents)) {
+      const event = node.timelineEvents.find(evt => evt.id === eventId);
+      if (event) {
+        editingTimelineEventId = eventId;
+        
+        const form = document.getElementById('addTimelineEventForm');
+        const titleInput = document.getElementById('timelineEventTitle');
+        const dateInput = document.getElementById('timelineEventDate');
+        const descInput = document.getElementById('timelineEventDesc');
+        
+        if (titleInput) titleInput.value = event.title;
+        if (dateInput) dateInput.value = event.date || '';
+        if (descInput) descInput.value = event.desc || '';
+        
+        const formHeader = form ? form.querySelector('h4') : null;
+        if (formHeader) formHeader.textContent = 'עריכת תת-מטרה';
+        
+        if (form) {
+          form.style.display = 'flex';
+          form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+    }
+  }
+}
+
+function editTimelineEvent(nodeKey, eventId, title, date, desc) {
+  if (myDiagram && myDiagram.model) {
+    const node = myDiagram.model.findNodeDataForKey(nodeKey);
+    if (node && Array.isArray(node.timelineEvents)) {
+      myDiagram.startTransaction('edit timeline event');
+      const updatedEvents = node.timelineEvents.map(evt => {
+        if (evt.id === eventId) {
+          return { ...evt, title: title.trim(), date: date || '', desc: desc.trim() || '' };
+        }
+        return evt;
+      });
+      myDiagram.model.setDataProperty(node, 'timelineEvents', updatedEvents);
+      myDiagram.commitTransaction('edit timeline event');
+      
+      renderGoalPage(node);
+      showToast('תת-המטרה עודכנה בהצלחה', 'success');
+    }
+  }
 }
 
 function addTimelineEvent(nodeKey, title, date, desc) {
@@ -4152,15 +4229,24 @@ function saveTimelineEvent() {
     return;
   }
 
-  addTimelineEvent(nodeKey, title, date, desc);
+  if (editingTimelineEventId) {
+    editTimelineEvent(nodeKey, editingTimelineEventId, title, date, desc);
+  } else {
+    addTimelineEvent(nodeKey, title, date, desc);
+  }
 
   // Clear and hide form
   titleInput.value = '';
   if (dateInput) dateInput.value = '';
   if (descInput) descInput.value = '';
+  editingTimelineEventId = null;
   
   const form = document.getElementById('addTimelineEventForm');
-  if (form) form.style.display = 'none';
+  if (form) {
+    form.style.display = 'none';
+    const formHeader = form.querySelector('h4');
+    if (formHeader) formHeader.textContent = 'תת-מטרה חדשה';
+  }
 }
 
 function cancelTimelineEventForm() {
@@ -4171,9 +4257,15 @@ function cancelTimelineEventForm() {
   if (titleInput) titleInput.value = '';
   if (dateInput) dateInput.value = '';
   if (descInput) descInput.value = '';
+  
+  editingTimelineEventId = null;
 
   const form = document.getElementById('addTimelineEventForm');
-  if (form) form.style.display = 'none';
+  if (form) {
+    form.style.display = 'none';
+    const formHeader = form.querySelector('h4');
+    if (formHeader) formHeader.textContent = 'תת-מטרה חדשה';
+  }
 }
 
 
