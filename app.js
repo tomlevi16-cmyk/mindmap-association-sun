@@ -1565,6 +1565,36 @@ function setupUIEventListeners() {
     });
   }
 
+  // Go to Goal Details Page from Work Plan Modal
+  const workPlanGoToPageBtn = document.getElementById('workPlanGoToPageBtn');
+  if (workPlanGoToPageBtn) {
+    workPlanGoToPageBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!activeWorkPlanNode) return;
+
+      const nodeKey = activeWorkPlanNode.data.key;
+
+      // Ensure the node is designated as a goal node
+      if (!activeWorkPlanNode.data.isGoal) {
+        myDiagram.startTransaction("הגדרת מטרה");
+        myDiagram.model.setDataProperty(activeWorkPlanNode.data, "isGoal", true);
+        myDiagram.commitTransaction("הגדרת מטרה");
+      }
+
+      // Save current modal inputs
+      if (workPlanConfirmBtn) {
+        workPlanConfirmBtn.click();
+      }
+
+      // If saving succeeded (modal was closed)
+      if (workPlanModal && !workPlanModal.classList.contains('open')) {
+        // Switch tab to 'goals' and open the single goal page
+        switchTab('goals');
+        openGoalPage(nodeKey);
+      }
+    });
+  }
+
   // Setup Quantitative fields display listener
   const quantCheckListener = document.getElementById('workPlanIsQuantitative');
   if (quantCheckListener) {
@@ -1703,6 +1733,34 @@ function setupUIEventListeners() {
     });
     layoutHorizBtn.addEventListener('click', () => {
       setTimelineLayout('horizontal');
+    });
+  }
+
+  // Goal Page Free Text Plan autosave listener
+  const freeTextPlan = document.getElementById('goalPageFreeTextPlan');
+  if (freeTextPlan) {
+    let saveTimeout = null;
+    freeTextPlan.addEventListener('input', (e) => {
+      const nodeKey = window.currentGoalPageNodeKey;
+      if (!nodeKey) return;
+
+      const nodeData = myDiagram.model.findNodeDataForKey(nodeKey);
+      if (nodeData) {
+        myDiagram.startTransaction("עדכון תוכנית חופשית");
+        myDiagram.model.setDataProperty(nodeData, "workPlan", e.target.value);
+        myDiagram.commitTransaction("עדכון תוכנית חופשית");
+        scheduleAutoSave();
+
+        // Show "Autosaved" text
+        const statusSpan = document.getElementById('freeTextSaveStatus');
+        if (statusSpan) {
+          statusSpan.style.opacity = '1';
+          if (saveTimeout) clearTimeout(saveTimeout);
+          saveTimeout = setTimeout(() => {
+            statusSpan.style.opacity = '0';
+          }, 1500);
+        }
+      }
     });
   }
 
@@ -3876,6 +3934,12 @@ function renderGoalPage(node) {
   const pageTitle = document.getElementById('goalPageTitle');
   if (pageTitle) {
     pageTitle.textContent = node.text || "מטרה ללא שם";
+  }
+
+  // Populate free text plan
+  const freeTextPlan = document.getElementById('goalPageFreeTextPlan');
+  if (freeTextPlan) {
+    freeTextPlan.value = node.workPlan || '';
   }
 
   renderGoalPageDetails(node);

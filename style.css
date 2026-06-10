@@ -2226,3 +2226,20 @@ kbd {
 .timeline-container.horizontal .timeline-item:last-child::before {
   display: none !important;
 }
+
+/* Link to Goal Details Page from Modal */
+.btn-goto-page {
+  transition: all 0.2s ease !important;
+}
+.btn-goto-page:hover {
+  background: var(--accent-color) !important;
+  color: #090d16 !important;
+  box-shadow: 0 0 12px var(--accent-color) !important;
+  transform: translateY(-1px) !important;
+}
+.btn-goto-page:hover svg {
+  stroke: #090d16 !important;
+}
+.btn-goto-page:active {
+  transform: translateY(0) !important;
+}
