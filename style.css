@@ -2026,12 +2026,24 @@ kbd {
 }
 
 .timeline-item.completed {
-  opacity: 0.6;
+  opacity: 0.85;
+}
+
+.timeline-item.completed .timeline-content {
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  background: rgba(16, 185, 129, 0.02) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15), 0 0 8px rgba(16, 185, 129, 0.1) !important;
 }
 
 .timeline-item.completed .timeline-content h4 {
   text-decoration: line-through;
-  color: var(--text-secondary);
+  color: var(--success-color) !important;
+}
+
+[data-theme="light"] .timeline-item.completed .timeline-content {
+  border-color: rgba(5, 150, 105, 0.2) !important;
+  background: rgba(5, 150, 105, 0.015) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.02), 0 0 8px rgba(5, 150, 105, 0.05) !important;
 }
 
 .goal-card-footer .btn-page {
