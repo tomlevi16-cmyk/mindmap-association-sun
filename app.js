@@ -2797,11 +2797,6 @@ function renderDashboardList(containerId, tasks) {
     nodeCheckbox.type = 'checkbox';
     nodeCheckbox.checked = task.nodeCompleted;
     nodeCheckbox.title = task.nodeCompleted ? 'בועת היעד סומנה כבוצעה. לחץ לביטול' : 'לחץ כדי לסמן את בועת היעד כבוצעה';
-    nodeCheckbox.style.width = '12px';
-    nodeCheckbox.style.height = '12px';
-    nodeCheckbox.style.margin = '0';
-    nodeCheckbox.style.cursor = 'pointer';
-    nodeCheckbox.style.accentColor = 'var(--success-color)';
     nodeCheckbox.addEventListener('click', (e) => {
       e.stopPropagation(); // prevent triggering jumpToNode
     });
