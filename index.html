@@ -213,6 +213,38 @@
                 </div>
               </div>
 
+              <!-- Goal Tasks Checklist Panel -->
+              <div class="dashboard-column glass-panel" style="gap: 12px; height: auto; padding: 20px; width: 100%;">
+                <div class="column-header">
+                  <h3>📋 משימות ויעדי המטרה</h3>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 14px; width: 100%;">
+                  <!-- Monthly Tasks Section -->
+                  <div style="background: rgba(255, 255, 255, 0.015); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-glass);">
+                    <h4 class="goal-tasks-subheader" style="margin: 0 0 8px 0; color: var(--accent-color); font-weight: 700;">📅 משימות חודשיות</h4>
+                    <div id="goalPageMonthlyTasksList" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; margin-bottom: 8px;">
+                      <!-- Monthly tasks rendered dynamically -->
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <input type="text" id="goalPageMonthlyTaskInput" placeholder="הוסף משימה חודשית..." style="padding: 6px 10px; font-size: 0.8rem; margin: 0; background: var(--card-bg); border: 1px solid var(--border-glass); color: var(--text-primary); border-radius: var(--border-radius-sm); width: 100%; outline: none;">
+                      <button id="goalPageAddMonthlyTaskBtn" style="padding: 6px 12px; background: var(--accent-color); color: #090d16; font-weight: bold; font-size: 1.1rem; border-radius: var(--border-radius-sm); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0;">+</button>
+                    </div>
+                  </div>
+
+                  <!-- Weekly Tasks Section -->
+                  <div style="background: rgba(255, 255, 255, 0.015); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-glass);">
+                    <h4 class="goal-tasks-subheader" style="margin: 0 0 8px 0; color: var(--accent-color); font-weight: 700;">⚡ משימות שבועיות</h4>
+                    <div id="goalPageWeeklyTasksList" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; margin-bottom: 8px;">
+                      <!-- Weekly tasks rendered dynamically -->
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <input type="text" id="goalPageWeeklyTaskInput" placeholder="הוסף משימה שבועית..." style="padding: 6px 10px; font-size: 0.8rem; margin: 0; background: var(--card-bg); border: 1px solid var(--border-glass); color: var(--text-primary); border-radius: var(--border-radius-sm); width: 100%; outline: none;">
+                      <button id="goalPageAddWeeklyTaskBtn" style="padding: 6px 12px; background: var(--accent-color); color: #090d16; font-weight: bold; font-size: 1.1rem; border-radius: var(--border-radius-sm); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0;">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Free Text Plan Panel -->
               <div class="dashboard-column glass-panel" style="gap: 12px; height: auto; padding: 20px; width: 100%;">
                 <div class="column-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">

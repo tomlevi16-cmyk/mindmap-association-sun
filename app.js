@@ -1764,6 +1764,44 @@ function setupUIEventListeners() {
     });
   }
 
+  // Goal Page Add Task button and input listeners
+  const goalPageAddMonthlyBtn = document.getElementById('goalPageAddMonthlyTaskBtn');
+  const goalPageAddWeeklyBtn = document.getElementById('goalPageAddWeeklyTaskBtn');
+  const goalPageMonthlyInput = document.getElementById('goalPageMonthlyTaskInput');
+  const goalPageWeeklyInput = document.getElementById('goalPageWeeklyTaskInput');
+
+  if (goalPageAddMonthlyBtn) {
+    goalPageAddMonthlyBtn.addEventListener('click', () => {
+      const nodeKey = window.currentGoalPageNodeKey;
+      if (nodeKey) addGoalPageTask(nodeKey, 'monthly');
+    });
+  }
+  if (goalPageMonthlyInput) {
+    goalPageMonthlyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const nodeKey = window.currentGoalPageNodeKey;
+        if (nodeKey) addGoalPageTask(nodeKey, 'monthly');
+      }
+    });
+  }
+
+  if (goalPageAddWeeklyBtn) {
+    goalPageAddWeeklyBtn.addEventListener('click', () => {
+      const nodeKey = window.currentGoalPageNodeKey;
+      if (nodeKey) addGoalPageTask(nodeKey, 'weekly');
+    });
+  }
+  if (goalPageWeeklyInput) {
+    goalPageWeeklyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const nodeKey = window.currentGoalPageNodeKey;
+        if (nodeKey) addGoalPageTask(nodeKey, 'weekly');
+      }
+    });
+  }
+
   // Keyboard navigation inside timeline event form
   const titleInput = document.getElementById('timelineEventTitle');
   if (titleInput) {
@@ -2657,6 +2695,9 @@ function toggleDashboardTask(taskId, completed) {
   
   renderTasksDashboard();
   renderGoalsDashboard();
+  if (window.currentGoalPageNodeKey !== null) {
+    openGoalPage(window.currentGoalPageNodeKey);
+  }
 }
 
 // Delete a task directly from the dashboard view
@@ -3930,6 +3971,173 @@ function closeGoalPage() {
   renderGoalsDashboard();
 }
 
+// Render monthly and weekly tasks for the Single Goal Page
+function renderGoalPageTasks(node) {
+  const monthlyList = document.getElementById('goalPageMonthlyTasksList');
+  const weeklyList = document.getElementById('goalPageWeeklyTasksList');
+  if (!monthlyList || !weeklyList) return;
+
+  monthlyList.innerHTML = '';
+  weeklyList.innerHTML = '';
+
+  const monthlyTasks = Array.isArray(node.monthlyTasks) ? node.monthlyTasks : [];
+  const weeklyTasks = Array.isArray(node.weeklyTasks) ? node.weeklyTasks : [];
+
+  // Render Monthly Tasks
+  if (monthlyTasks.length === 0) {
+    monthlyList.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center; padding: 6px;">אין משימות חודשיות</div>';
+  } else {
+    monthlyTasks.forEach((task, index) => {
+      const item = document.createElement('div');
+      item.className = `goal-task-check-item ${task.completed ? 'completed' : ''}`;
+      item.style.display = 'flex';
+      item.style.justifyContent = 'space-between';
+      item.style.alignItems = 'center';
+      item.style.width = '100%';
+
+      const left = document.createElement('label');
+      left.style.display = 'flex';
+      left.style.alignItems = 'center';
+      left.style.gap = '8px';
+      left.style.cursor = 'pointer';
+      left.style.flexGrow = '1';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'custom-black-checkbox';
+      checkbox.checked = !!task.completed;
+      
+      const taskId = `main|monthly|${node.key}|${index}`;
+      checkbox.addEventListener('change', () => {
+        toggleDashboardTask(taskId, checkbox.checked);
+      });
+
+      const span = document.createElement('span');
+      span.textContent = task.text;
+
+      left.appendChild(checkbox);
+      left.appendChild(span);
+      item.appendChild(left);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.innerHTML = '&times;';
+      deleteBtn.style.background = 'transparent';
+      deleteBtn.style.border = 'none';
+      deleteBtn.style.color = 'var(--text-secondary)';
+      deleteBtn.style.fontSize = '1.2rem';
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.style.padding = '0 6px';
+      deleteBtn.title = 'מחק משימה';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteGoalPageTask(node.key, 'monthly', index);
+      });
+
+      item.appendChild(deleteBtn);
+      monthlyList.appendChild(item);
+    });
+  }
+
+  // Render Weekly Tasks
+  if (weeklyTasks.length === 0) {
+    weeklyList.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center; padding: 6px;">אין משימות שבועיות</div>';
+  } else {
+    weeklyTasks.forEach((task, index) => {
+      const item = document.createElement('div');
+      item.className = `goal-task-check-item ${task.completed ? 'completed' : ''}`;
+      item.style.display = 'flex';
+      item.style.justifyContent = 'space-between';
+      item.style.alignItems = 'center';
+      item.style.width = '100%';
+
+      const left = document.createElement('label');
+      left.style.display = 'flex';
+      left.style.alignItems = 'center';
+      left.style.gap = '8px';
+      left.style.cursor = 'pointer';
+      left.style.flexGrow = '1';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'custom-black-checkbox';
+      checkbox.checked = !!task.completed;
+
+      const taskId = `main|weekly|${node.key}|${index}`;
+      checkbox.addEventListener('change', () => {
+        toggleDashboardTask(taskId, checkbox.checked);
+      });
+
+      const span = document.createElement('span');
+      span.textContent = task.text;
+
+      left.appendChild(checkbox);
+      left.appendChild(span);
+      item.appendChild(left);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.innerHTML = '&times;';
+      deleteBtn.style.background = 'transparent';
+      deleteBtn.style.border = 'none';
+      deleteBtn.style.color = 'var(--text-secondary)';
+      deleteBtn.style.fontSize = '1.2rem';
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.style.padding = '0 6px';
+      deleteBtn.title = 'מחק משימה';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteGoalPageTask(node.key, 'weekly', index);
+      });
+
+      item.appendChild(deleteBtn);
+      weeklyList.appendChild(item);
+    });
+  }
+}
+
+// Add task directly from Goal details page
+function addGoalPageTask(nodeKey, type) {
+  const input = document.getElementById(type === 'monthly' ? 'goalPageMonthlyTaskInput' : 'goalPageWeeklyTaskInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!myDiagram || !myDiagram.model) return;
+  const node = myDiagram.model.findNodeDataForKey(nodeKey);
+  if (!node) return;
+
+  const taskList = type === 'monthly' ? node.monthlyTasks : node.weeklyTasks;
+  const newList = Array.isArray(taskList) ? JSON.parse(JSON.stringify(taskList)) : [];
+  newList.push({ text: text, completed: false });
+
+  myDiagram.startTransaction("הוספת משימה מדף מטרה");
+  myDiagram.model.setDataProperty(node, type === 'monthly' ? "monthlyTasks" : "weeklyTasks", newList);
+  myDiagram.commitTransaction("הוספת משימה מדף מטרה");
+
+  input.value = '';
+  
+  scheduleAutoSave();
+  openGoalPage(nodeKey);
+}
+
+// Delete task directly from Goal details page
+function deleteGoalPageTask(nodeKey, type, index) {
+  if (!myDiagram || !myDiagram.model) return;
+  const node = myDiagram.model.findNodeDataForKey(nodeKey);
+  if (!node) return;
+
+  const taskList = type === 'monthly' ? node.monthlyTasks : node.weeklyTasks;
+  if (taskList && Array.isArray(taskList)) {
+    myDiagram.startTransaction("מחיקת משימה מדף מטרה");
+    const newList = JSON.parse(JSON.stringify(taskList));
+    newList.splice(index, 1);
+    myDiagram.model.setDataProperty(node, type === 'monthly' ? "monthlyTasks" : "weeklyTasks", newList);
+    myDiagram.commitTransaction("מחיקת משימה מדף מטרה");
+
+    scheduleAutoSave();
+    openGoalPage(nodeKey);
+  }
+}
+
 function renderGoalPage(node) {
   const pageTitle = document.getElementById('goalPageTitle');
   if (pageTitle) {
@@ -3941,6 +4149,9 @@ function renderGoalPage(node) {
   if (freeTextPlan) {
     freeTextPlan.value = node.workPlan || '';
   }
+
+  // Populate tasks checklist
+  renderGoalPageTasks(node);
 
   renderGoalPageDetails(node);
   renderGoalTimeline(node);
