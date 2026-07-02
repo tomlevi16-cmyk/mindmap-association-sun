@@ -3869,7 +3869,29 @@ function loadFromDB() {
       console.log("Loaded data from DB successfully");
     })
     .catch(err => {
-      console.log("Failed to load from DB, using LocalStorage");
+      console.log("Failed to load from DB, trying default_db.json as fallback");
+      const currentVersion = '1.2';
+      const savedVersion = localStorage.getItem('mindmap_db_version');
+      const saveKey = 'mindmap_auto_save_main';
+      const hasLocalData = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
+      
+      if (!hasLocalData || savedVersion !== currentVersion) {
+        return fetch('./default_db.json')
+          .then(res => {
+            if (!res.ok) throw new Error("Default DB file not found");
+            return res.json();
+          })
+          .then(dbData => {
+            if (dbData.main) {
+              localStorage.setItem('mindmap_auto_save_main', dbData.main);
+              localStorage.setItem('mindmap_db_version', currentVersion);
+              console.log("Initialized/Updated localStorage with default_db.json");
+            }
+          })
+          .catch(e => {
+            console.error("Could not load default_db.json:", e);
+          });
+      }
     });
 }
 
