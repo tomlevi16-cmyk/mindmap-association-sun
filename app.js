@@ -49,6 +49,15 @@ function migrateNodeData(nodes) {
   });
 }
 
+// Helper to clean up port properties from links to ensure auto-routing edge-to-edge
+function sanitizeLinkData(links) {
+  if (!Array.isArray(links)) return;
+  links.forEach(link => {
+    delete link.fromPort;
+    delete link.toPort;
+  });
+}
+
 // Presets data models
 const presets = {
   calmness: {
@@ -150,9 +159,15 @@ function initApp() {
       let savedModel = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
       if (savedModel) {
         try {
-          const loadedModel = go.Model.fromJson(savedModel);
-          loadedModel.linkFromPortIdProperty = "fromPort";
-          loadedModel.linkToPortIdProperty = "toPort";
+          const modelObj = JSON.parse(savedModel);
+          if (modelObj.linkDataArray) {
+            sanitizeLinkData(modelObj.linkDataArray);
+          }
+          const loadedModel = go.Model.fromJson(modelObj);
+          // Explicitly clear port properties to force auto-routing to closest sides
+          loadedModel.linkFromPortIdProperty = "";
+          loadedModel.linkToPortIdProperty = "";
+          sanitizeLinkData(loadedModel.linkDataArray);
           migrateNodeData(loadedModel.nodeDataArray);
           myDiagram.model = loadedModel;
         } catch (e) {
@@ -186,6 +201,7 @@ function initDiagram() {
   myDiagram = $(go.Diagram, "myDiagramDiv", {
     "undoManager.isEnabled": true,
     "scrollMode": go.Diagram.InfiniteScroll,
+    padding: new go.Margin(80, 120, 80, 80),
     // Smooth scroll and zoom behavior
     "animationManager.duration": 300,
     "toolManager.mouseWheelBehavior": go.ToolManager.WheelZoom,
@@ -271,8 +287,8 @@ function initDiagram() {
     },
     // Auto-arrange layout
     layout: $(go.ForceDirectedLayout, {
-      defaultSpringLength: 70,
-      defaultElectricalCharge: 150,
+      defaultSpringLength: 140,
+      defaultElectricalCharge: -1200,
       isOngoing: false
     })
   });
@@ -336,7 +352,10 @@ function initDiagram() {
           parameter1: 20, // Rounded corners for rectangle
           strokeWidth: 2.5,
           fill: "#2D3748",
-          stroke: "#4A5568"
+          stroke: "#4A5568",
+          portId: "",
+          fromLinkable: true,
+          toLinkable: true
         },
         new go.Binding("figure", "shape"),
         new go.Binding("fill", "fill"),
@@ -463,8 +482,7 @@ function initDiagram() {
     $(go.Link, {
       relinkableFrom: true, relinkableTo: true,
       reshapable: true, resegmentable: true,
-      curve: go.Link.Bezier,
-      adjusting: go.Link.End
+      curve: go.Link.Bezier
     },
       $(go.Shape, { strokeWidth: 3, stroke: "#4A5568" },
         new go.Binding("strokeWidth", "strokeWidth"),
@@ -1132,9 +1150,13 @@ function setupUIEventListeners() {
           // 1. Try parsing as standard GoJS JSON Model
           const jsonObj = JSON.parse(text);
           if (jsonObj && (jsonObj.class || jsonObj.nodeDataArray)) {
-            newModel = go.Model.fromJson(text);
-            newModel.linkFromPortIdProperty = "fromPort";
-            newModel.linkToPortIdProperty = "toPort";
+            if (jsonObj.linkDataArray) {
+              sanitizeLinkData(jsonObj.linkDataArray);
+            }
+            newModel = go.Model.fromJson(jsonObj);
+            // Explicitly clear port properties to force auto-routing to closest sides
+            newModel.linkFromPortIdProperty = "";
+            newModel.linkToPortIdProperty = "";
             isNative = true;
           }
         } catch (e) {
@@ -1170,8 +1192,10 @@ function setupUIEventListeners() {
 
           // Explicitly construct a GraphLinksModel to ensure links render correctly
           newModel = new go.GraphLinksModel();
-          newModel.linkFromPortIdProperty = "fromPort";
-          newModel.linkToPortIdProperty = "toPort";
+          // Explicitly clear port properties to force auto-routing to closest sides
+          newModel.linkFromPortIdProperty = "";
+          newModel.linkToPortIdProperty = "";
+          sanitizeLinkData(links);
           newModel.nodeDataArray = nodes;
           newModel.linkDataArray = links;
         }
@@ -1887,10 +1911,22 @@ function applyLayout(type, factor) {
   const $ = go.GraphObject.make;
   myDiagram.startTransaction("change layout");
 
+  // Clear locations so that layout starts fresh and overlaps are resolved
+  myDiagram.nodes.each(node => {
+    myDiagram.model.setDataProperty(node.data, "loc", undefined);
+  });
+
+  // Center camera and zoom to fit after layout animation completes
+  const zoomFitOnce = (e) => {
+    myDiagram.removeDiagramListener("LayoutCompleted", zoomFitOnce);
+    myDiagram.commandHandler.zoomToFit();
+  };
+  myDiagram.addDiagramListener("LayoutCompleted", zoomFitOnce);
+
   if (type === 'ForceDirected') {
     myDiagram.layout = $(go.ForceDirectedLayout, {
       defaultSpringLength: factor,
-      defaultElectricalCharge: factor * 2,
+      defaultElectricalCharge: -factor * 8,
       isOngoing: false
     });
   } else if (type === 'Tree') {
@@ -1920,8 +1956,8 @@ function applyLayout(type, factor) {
   } else if (type === 'Radial') {
     // Simulating radial layout using a wide force-directed configuration
     myDiagram.layout = $(go.ForceDirectedLayout, {
-      defaultSpringLength: factor * 1.2,
-      defaultElectricalCharge: factor * 3,
+      defaultSpringLength: factor * 1.3,
+      defaultElectricalCharge: -factor * 10,
       infinityDistance: 1000,
       isOngoing: false
     });
@@ -1940,10 +1976,12 @@ function loadPreset(key) {
   const links = JSON.parse(JSON.stringify(preset.links));
 
   migrateNodeData(nodes);
+  sanitizeLinkData(links);
 
   const newModel = new go.GraphLinksModel(nodes, links);
-  newModel.linkFromPortIdProperty = "fromPort";
-  newModel.linkToPortIdProperty = "toPort";
+  // Explicitly clear port properties to force auto-routing to closest sides
+  newModel.linkFromPortIdProperty = "";
+  newModel.linkToPortIdProperty = "";
   
   // Note: Do NOT wrap myDiagram.model assignment in a transaction.
   myDiagram.model = newModel;
@@ -1966,17 +2004,17 @@ function loadPreset(key) {
   
   // Force reset layout switcher options to default ForceDirected
   document.getElementById('layoutSelect').value = 'ForceDirected';
-  document.getElementById('layoutForceSpring').value = 70;
-  document.getElementById('layoutSpringVal').innerText = 70;
+  document.getElementById('layoutForceSpring').value = 140;
+  document.getElementById('layoutSpringVal').innerText = 140;
   document.getElementById('layoutAdjusters').style.display = 'block';
   document.getElementById('layoutSliderLabel').innerText = 'אורך הענפים';
   
-  applyLayout('ForceDirected', 70);
+  applyLayout('ForceDirected', 140);
 
   // Center camera and zoom to fit
   setTimeout(() => {
+    myDiagram.contentAlignment = go.Spot.None;
     myDiagram.commandHandler.zoomToFit();
-    myDiagram.contentAlignment = go.Spot.Center;
   }, 100);
 
   let presetName = 'מפה חדשה';
@@ -2459,9 +2497,14 @@ function switchTab(tabId, saveCurrent = true) {
 
       if (savedModel) {
         try {
-          const loadedModel = go.Model.fromJson(savedModel);
-          loadedModel.linkFromPortIdProperty = "fromPort";
-          loadedModel.linkToPortIdProperty = "toPort";
+          const modelObj = JSON.parse(savedModel);
+          if (modelObj.linkDataArray) {
+            sanitizeLinkData(modelObj.linkDataArray);
+          }
+          const loadedModel = go.Model.fromJson(modelObj);
+          // Explicitly clear port properties to force auto-routing to closest sides
+          loadedModel.linkFromPortIdProperty = "";
+          loadedModel.linkToPortIdProperty = "";
           migrateNodeData(loadedModel.nodeDataArray);
           myDiagram.model = loadedModel;
           myDiagram.layoutDiagram(true);
