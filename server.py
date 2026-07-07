@@ -16,26 +16,17 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 model_str = data.get('model')
                 
                 if tab_id and model_str is not None:
-                    user_id = self.headers.get('x-user-id', 'default_user')
                     # Load existing DB
                     db_data = {}
                     if os.path.exists(DB_FILE):
                         try:
                             with open(DB_FILE, 'r', encoding='utf-8') as f:
-                                raw_data = json.load(f)
-                                # Detect and migrate old format
-                                if 'main' in raw_data and not isinstance(raw_data['main'], dict):
-                                    db_data = {'default_user': raw_data}
-                                else:
-                                    db_data = raw_data
+                                db_data = json.load(f)
                         except Exception:
                             pass
                     
-                    if user_id not in db_data:
-                        db_data[user_id] = {}
-                        
                     # Update
-                    db_data[user_id][tab_id] = model_str
+                    db_data[tab_id] = model_str
                     
                     # Save DB
                     with open(DB_FILE, 'w', encoding='utf-8') as f:
@@ -59,18 +50,11 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/api/load':
-            user_id = self.headers.get('x-user-id', 'default_user')
             db_data = {}
             if os.path.exists(DB_FILE):
                 try:
                     with open(DB_FILE, 'r', encoding='utf-8') as f:
-                        raw_data = json.load(f)
-                        # Detect and handle old format
-                        if 'main' in raw_data and not isinstance(raw_data['main'], dict):
-                            if user_id == 'default_user':
-                                db_data = raw_data
-                        else:
-                            db_data = raw_data.get(user_id, {})
+                        db_data = json.load(f)
                 except Exception:
                     pass
             self.send_response(200)
