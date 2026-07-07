@@ -1,3 +1,250 @@
+// Initialize Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyC-r8CfozRW9d5Vdvr4S6Uhic3m-oR4eLM",
+  authDomain: "libero-6e823.firebaseapp.com",
+  projectId: "libero-6e823",
+  storageBucket: "libero-6e823.appspot.com",
+  messagingSenderId: "542385150824",
+  appId: "1:542385150824:web:e1164ea22c4d62b9a7cefe"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Global currentUser variable
+let currentUser = null;
+let isLoadingUserData = false; // Flag to prevent race condition auto-saves during load
+
+// Patch localStorage to support multi-user isolation and automatic cloud sync
+const originalSetItem = localStorage.setItem;
+const originalGetItem = localStorage.getItem;
+let syncTimeout = null;
+
+localStorage.setItem = function(key, value) {
+  if (currentUser && key.startsWith('mindmap_auto_save')) {
+    const userKey = `${key}_${currentUser.uid}`;
+    originalSetItem.call(localStorage, userKey, value);
+    if (!isLoadingUserData) {
+      scheduleCloudSync(key, value);
+    }
+  } else {
+    originalSetItem.call(localStorage, key, value);
+  }
+};
+
+localStorage.getItem = function(key) {
+  if (currentUser && key.startsWith('mindmap_auto_save')) {
+    const userKey = `${key}_${currentUser.uid}`;
+    return originalGetItem.call(localStorage, userKey);
+  }
+  return originalGetItem.call(localStorage, key);
+};
+
+// Debounced function to sync changes to Firestore and local server
+function scheduleCloudSync(key, value) {
+  if (syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(async () => {
+    if (!currentUser) return;
+    const uid = currentUser.uid;
+    const tabId = key.replace('mindmap_auto_save_', ''); // e.g. 'main' or 'importance'
+    
+    // 1. Sync to Firestore
+    try {
+      const docRef = db.collection('users').doc(uid).collection('data').doc('mindmap');
+      await docRef.set({
+        [tabId]: value,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      console.log(`Synced ${tabId} to Firestore successfully`);
+    } catch (e) {
+      console.warn("Firestore sync failed:", e);
+    }
+    
+    // 2. Sync to local backend
+    try {
+      await fetch('/api/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': uid
+        },
+        body: JSON.stringify({ tabId: tabId, model: value })
+      });
+      console.log(`Synced ${tabId} to local server successfully`);
+    } catch (e) {
+      console.log("Local server sync failed (not active):", e);
+    }
+  }, 1000); // 1s debounce
+}
+
+// Function to load user-specific data from Firestore and local server
+async function loadUserData(uid) {
+  if (!uid) return;
+  
+  let dataLoaded = false;
+  
+  // 1. Try to load from Firestore
+  try {
+    const docRef = db.collection('users').doc(uid).collection('data').doc('mindmap');
+    const doc = await docRef.get();
+    if (doc.exists) {
+      const fbData = doc.data();
+      if (fbData) {
+        if (fbData.main) {
+          localStorage.setItem('mindmap_auto_save_main', fbData.main);
+        }
+        if (fbData.importance) {
+          localStorage.setItem('mindmap_auto_save_importance', fbData.importance);
+        }
+        dataLoaded = true;
+        console.log("Loaded user data from Firestore");
+      }
+    }
+  } catch (e) {
+    console.warn("Could not load from Firestore (using fallback):", e);
+  }
+  
+  // 2. Try to load from local server
+  try {
+    const response = await fetch('/api/load', {
+      headers: { 'x-user-id': uid }
+    });
+    if (response.ok) {
+      const serverData = await response.json();
+      if (serverData) {
+        if (serverData.main) {
+          localStorage.setItem('mindmap_auto_save_main', serverData.main);
+        }
+        if (serverData.importance) {
+          localStorage.setItem('mindmap_auto_save_importance', serverData.importance);
+        }
+        dataLoaded = true;
+        console.log("Loaded user data from local server");
+      }
+    }
+  } catch (e) {
+    console.log("Local server load failed or not running:", e);
+  }
+  
+  // 3. Fallback if user has no data yet (first time login)
+  if (!localStorage.getItem('mindmap_auto_save_main')) {
+    const oldMain = originalGetItem.call(localStorage, 'mindmap_auto_save_main') || originalGetItem.call(localStorage, 'mindmap_auto_save');
+    if (oldMain) {
+      localStorage.setItem('mindmap_auto_save_main', oldMain);
+      console.log("Migrated local offline data to user space");
+    } else {
+      loadPreset('calmness');
+      const defaultStr = myDiagram.model.toJson();
+      localStorage.setItem('mindmap_auto_save_main', defaultStr);
+    }
+  }
+  
+  // Update diagram with loaded data
+  if (myDiagram) {
+    const activeKey = activeTab === 'main' ? 'mindmap_auto_save_main' : 'mindmap_auto_save_importance';
+    const savedModel = localStorage.getItem(activeKey);
+    if (savedModel) {
+      try {
+        const modelObj = JSON.parse(savedModel);
+        if (modelObj.linkDataArray) {
+          sanitizeLinkData(modelObj.linkDataArray);
+        }
+        const loadedModel = go.Model.fromJson(modelObj);
+        loadedModel.linkFromPortIdProperty = "";
+        loadedModel.linkToPortIdProperty = "";
+        sanitizeLinkData(loadedModel.linkDataArray);
+        migrateNodeData(loadedModel.nodeDataArray);
+        myDiagram.model = loadedModel;
+        myDiagram.layoutDiagram(true);
+        myDiagram.commandHandler.zoomToFit();
+      } catch (err) {
+        console.error("Error setting loaded model to diagram:", err);
+      }
+    }
+  }
+  
+  // Refresh dashboard contents
+  if (activeTab === 'tasks') {
+    renderTasksDashboard();
+  } else if (activeTab === 'goals') {
+    renderGoalsDashboard();
+  }
+}
+
+// Helper to toggle login spinner
+function setLoginLoading(isLoading, text = 'מתחבר...') {
+  const statusDiv = document.getElementById('loginStatus');
+  const statusText = document.getElementById('loginStatusText');
+  const googleBtn = document.getElementById('loginGoogleBtn');
+  const appleBtn = document.getElementById('loginAppleBtn');
+  
+  if (statusDiv && statusText) {
+    if (isLoading) {
+      statusText.textContent = text;
+      statusDiv.style.display = 'flex';
+      if (googleBtn) googleBtn.disabled = true;
+      if (appleBtn) appleBtn.disabled = true;
+    } else {
+      statusDiv.style.display = 'none';
+      if (googleBtn) googleBtn.disabled = false;
+      if (appleBtn) appleBtn.disabled = false;
+    }
+  }
+}
+
+// Google/Apple auth action
+function loginWithProvider(provider) {
+  setLoginLoading(true);
+  auth.signInWithPopup(provider)
+    .then((result) => {
+      showToast(`ברוך הבא, ${result.user.displayName}!`, 'success');
+    })
+    .catch((error) => {
+      console.error("Auth error:", error);
+      setLoginLoading(false);
+      showToast(`שגיאת התחברות: ${error.message}`, 'error');
+    });
+}
+
+// Listen to Firebase Auth state updates
+auth.onAuthStateChanged(async (user) => {
+  const loginOverlay = document.getElementById('loginOverlay');
+  const userProfile = document.getElementById('userProfile');
+  const userAvatar = document.getElementById('userAvatar');
+  const userName = document.getElementById('userName');
+  
+  if (user) {
+    currentUser = user;
+    isLoadingUserData = true; // Lock auto-saves during the load sequence
+    
+    if (userName) userName.textContent = user.displayName || 'משתמש Horizon';
+    if (userAvatar) userAvatar.src = user.photoURL || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+    if (userProfile) userProfile.style.display = 'flex';
+    if (loginOverlay) loginOverlay.classList.remove('active');
+    setLoginLoading(false);
+    
+    try {
+      await loadUserData(user.uid);
+    } finally {
+      // Small timeout to allow GoJS layout/rendering transactions to complete silently
+      setTimeout(() => {
+        isLoadingUserData = false;
+      }, 500);
+    }
+  } else {
+    currentUser = null;
+    isLoadingUserData = false;
+    if (userProfile) userProfile.style.display = 'none';
+    if (loginOverlay) loginOverlay.classList.add('active');
+    setLoginLoading(false);
+    
+    // Clear canvas when logged out
+    if (myDiagram) {
+      myDiagram.model = go.Model.fromJson({ class: "GraphLinksModel", nodeDataArray: [], linkDataArray: [] });
+    }
+  }
+});
+
 // Wait for DOM to load
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -1116,6 +1363,32 @@ document.getElementById('addNodeBranchBtn').addEventListener('click', () => {
 
 // UI elements event bindings (Zoom, Undo/Redo, Presets, Export/Import)
 function setupUIEventListeners() {
+  // Authentication event listeners
+  const loginGoogleBtn = document.getElementById('loginGoogleBtn');
+  if (loginGoogleBtn) {
+    loginGoogleBtn.addEventListener('click', () => {
+      loginWithProvider(new firebase.auth.GoogleAuthProvider());
+    });
+  }
+
+  const loginAppleBtn = document.getElementById('loginAppleBtn');
+  if (loginAppleBtn) {
+    loginAppleBtn.addEventListener('click', () => {
+      loginWithProvider(new firebase.auth.OAuthProvider('apple.com'));
+    });
+  }
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      auth.signOut().then(() => {
+        showToast('התנתקת בהצלחה', 'success');
+      }).catch(err => {
+        console.error("Sign out error:", err);
+      });
+    });
+  }
+
   // Preset selector
   const presetSelect = document.getElementById('presetSelect');
   if (presetSelect) {
@@ -2181,8 +2454,10 @@ function toggleTheme() {
 
 // Schedule autosave with debounce
 function scheduleAutoSave() {
+  if (isLoadingUserData) return; // Exit if loading user data
   if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
   autoSaveTimeout = setTimeout(() => {
+    if (isLoadingUserData) return; // Verify again after timeout delay
     if (myDiagram) {
       const modelStr = myDiagram.model.toJson();
       const saveKey = 'mindmap_auto_save_main';
@@ -3841,58 +4116,15 @@ function triggerDownload(url, filename) {
 
 // Save active tab mindmap model string to database
 function saveToDB(tabId, modelStr) {
-  fetch('/api/save', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tabId: tabId, model: modelStr })
-  })
-  .then(res => {
-    if (!res.ok) throw new Error();
-    console.log("Saved to database successfully");
-  })
-  .catch(err => {
-    console.error("Failed to save to DB:", err);
-  });
+  localStorage.setItem(`mindmap_auto_save_${tabId}`, modelStr);
 }
 
 // Load mindmap data from database on startup
 function loadFromDB() {
-  return fetch('/api/load')
-    .then(res => {
-      if (!res.ok) throw new Error();
-      return res.json();
-    })
-    .then(dbData => {
-      if (dbData.main) {
-        localStorage.setItem('mindmap_auto_save_main', dbData.main);
-      }
-      console.log("Loaded data from DB successfully");
-    })
-    .catch(err => {
-      console.log("Failed to load from DB, trying default_db.json as fallback");
-      const currentVersion = '1.2';
-      const savedVersion = localStorage.getItem('mindmap_db_version');
-      const saveKey = 'mindmap_auto_save_main';
-      const hasLocalData = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
-      
-      if (!hasLocalData || savedVersion !== currentVersion) {
-        return fetch('./default_db.json')
-          .then(res => {
-            if (!res.ok) throw new Error("Default DB file not found");
-            return res.json();
-          })
-          .then(dbData => {
-            if (dbData.main) {
-              localStorage.setItem('mindmap_auto_save_main', dbData.main);
-              localStorage.setItem('mindmap_db_version', currentVersion);
-              console.log("Initialized/Updated localStorage with default_db.json");
-            }
-          })
-          .catch(e => {
-            console.error("Could not load default_db.json:", e);
-          });
-      }
-    });
+  if (currentUser) {
+    return loadUserData(currentUser.uid);
+  }
+  return Promise.resolve();
 }
 
 // Sync liquid assets value from Libero Firebase project
