@@ -49,6 +49,17 @@
         </button>
       </div>
 
+      <!-- User Widget -->
+      <div id="userWidget" style="display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); padding: 4px 10px; border-radius: var(--border-radius-sm); font-size: 0.85rem;">
+        <span style="display: flex; align-items: center; gap: 4px; color: var(--text-primary); font-weight: 600;">
+          <span style="font-size: 1rem;">👤</span>
+          <span id="userDisplayName">אורח</span>
+        </span>
+        <button id="logoutBtn" style="padding: 3px 8px; font-size: 0.75rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: var(--border-radius-sm); cursor: pointer;" title="התנתק מהמערכת">
+          🚪 התנתק
+        </button>
+      </div>
+
       <!-- Theme Switcher -->
       <button id="themeToggleBtn" class="icon-btn" title="שנה ערכת נושא (בהיר/כהה)">
         <svg id="themeToggleIcon" viewBox="0 0 24 24">
@@ -804,6 +815,66 @@
     <div class="context-menu-item danger" id="ctxDeleteNode">
       <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
       מחק רכיב
+    </div>
+  </div>
+
+  <!-- System Multi-User Login / Register Overlay -->
+  <div class="modal-overlay open" id="loginModal" style="z-index: 9999; backdrop-filter: blur(25px) saturate(190%); background: rgba(5, 5, 7, 0.85);">
+    <div class="modal-content glass-panel" style="max-width: 440px; width: 90%; padding: 32px; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: center;">
+      
+      <!-- App Brand Logo & Title -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 24px;">
+        <div style="width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, var(--accent-color) 0%, #ff8f00 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(245, 166, 35, 0.3);">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="#090d16">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm1.88 3.12l-1.06 3.18-3.18 1.06 1.06-3.18 3.18-1.06z"/>
+          </svg>
+        </div>
+        <h2 style="font-size: 1.6rem; font-weight: 800; color: #ffffff; margin: 0;">Horizon</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">התחבר או הירשם לבניית מפת המטרות האישית שלך</p>
+      </div>
+
+      <!-- Auth Mode Switch Tabs -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; background: rgba(255, 255, 255, 0.05); padding: 4px; border-radius: 12px; border: 1px solid var(--border-glass); margin-bottom: 20px;">
+        <button id="authTabLogin" class="btn btn-sm active" style="justify-content: center; border-radius: 8px; background: var(--accent-color); color: #090d16; font-weight: 700; border: none; cursor: pointer;">התחברות</button>
+        <button id="authTabRegister" class="btn btn-sm" style="justify-content: center; border-radius: 8px; background: transparent; color: var(--text-secondary); font-weight: 600; border: none; cursor: pointer;">הרשמה חדשה</button>
+      </div>
+
+      <!-- Login / Register Form Container -->
+      <form id="authForm" style="display: flex; flex-direction: column; gap: 14px; text-align: right;">
+        
+        <div id="displayNameGroup" class="form-group" style="display: none;">
+          <label for="authDisplayNameInput">שם מלא / כינוי</label>
+          <input type="text" id="authDisplayNameInput" placeholder="הכנס שם מלא...">
+        </div>
+
+        <div class="form-group">
+          <label for="authUsernameInput">שם משתמש</label>
+          <input type="text" id="authUsernameInput" placeholder="הכנס שם משתמש..." required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="authPasswordInput">סיסמה</label>
+          <input type="password" id="authPasswordInput" placeholder="הכנס סיסמה..." required autocomplete="current-password" style="background: var(--card-bg); border: 1px solid var(--border-glass); color: var(--text-primary); padding: 8px 12px; border-radius: var(--border-radius-sm); font-family: inherit; font-size: 0.9rem; outline: none; width: 100%;">
+        </div>
+
+        <div id="authErrorMessage" style="display: none; font-size: 0.8rem; color: #f87171; text-align: center; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); padding: 8px; border-radius: 8px;"></div>
+
+        <button type="submit" id="authSubmitBtn" class="primary" style="width: 100%; justify-content: center; padding: 10px; margin-top: 6px; font-size: 0.95rem; font-weight: 700; border-radius: 10px;">
+          התחבר למערכת ➔
+        </button>
+      </form>
+
+      <!-- Divider -->
+      <div style="display: flex; align-items: center; gap: 10px; margin: 20px 0 16px 0;">
+        <div style="flex-grow: 1; height: 1px; background: var(--border-glass);"></div>
+        <span style="font-size: 0.75rem; color: var(--text-secondary);">או</span>
+        <div style="flex-grow: 1; height: 1px; background: var(--border-glass);"></div>
+      </div>
+
+      <!-- Guest / Demo Mode Button -->
+      <button id="guestLoginBtn" style="width: 100%; justify-content: center; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-primary); padding: 10px; font-size: 0.85rem; font-weight: 600; border-radius: 10px; cursor: pointer; transition: all 0.2s ease;">
+        <span>🚀 להתנסות כמשתמש אורח (דמו)</span>
+      </button>
     </div>
   </div>
 

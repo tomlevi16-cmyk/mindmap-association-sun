@@ -2243,3 +2243,21 @@ kbd {
 .btn-goto-page:active {
   transform: translateY(0) !important;
 }
+
+/* Login Modal & Multi-User Authentication Styles */
+#loginModal .form-group input:focus {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 10px rgba(245, 166, 35, 0.2) !important;
+}
+
+#guestLoginBtn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: var(--accent-color) !important;
+  color: var(--accent-color) !important;
+  transform: translateY(-1px);
+}
+
+#userWidget button#logoutBtn:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+}

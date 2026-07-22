@@ -19,6 +19,148 @@ let draggedGoalNodeKey = null;
 let expandedGoalKeys = new Set();
 let editingTimelineEventId = null;
 let timelineLayoutMode = 'vertical';
+let currentUser = null; // { username: '...', displayName: '...' }
+let authMode = 'login'; // 'login' or 'register'
+
+// Multi-User LocalStorage and Session Helpers
+function getUserSaveKey(tabId = 'main') {
+  if (currentUser && currentUser.username) {
+    return `mindmap_user_${currentUser.username}_${tabId}`;
+  }
+  return `mindmap_auto_save_${tabId}`;
+}
+
+function getUserSavedModel(tabId = 'main') {
+  const userKey = getUserSaveKey(tabId);
+  return localStorage.getItem(userKey) || localStorage.getItem(`mindmap_auto_save_${tabId}`) || localStorage.getItem('mindmap_auto_save');
+}
+
+function updateAuthUI() {
+  const userDisplayName = document.getElementById('userDisplayName');
+  const loginModal = document.getElementById('loginModal');
+
+  if (currentUser) {
+    if (userDisplayName) userDisplayName.textContent = currentUser.displayName || currentUser.username;
+    if (loginModal) loginModal.classList.remove('open');
+  } else {
+    if (loginModal) loginModal.classList.add('open');
+  }
+}
+
+function loginUser(username, password) {
+  const cleanUser = username.trim().toLowerCase();
+  const cleanPass = password.trim();
+
+  return fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: cleanUser, password: cleanPass })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error);
+    return { username: data.username, displayName: data.displayName };
+  })
+  .catch(err => {
+    // LocalStorage Fallback Authentication for static web hosts (Netlify / GitHub Pages)
+    const usersJson = localStorage.getItem('mindmap_users') || '{}';
+    const users = JSON.parse(usersJson);
+    const localUser = users[cleanUser];
+    if (!localUser || localUser.password !== cleanPass) {
+      throw new Error(err.message === 'Failed to fetch' || err.message === 'Load failed' ? 'שם משתמש או סיסמה שגויים' : err.message);
+    }
+    return { username: cleanUser, displayName: localUser.displayName || cleanUser };
+  })
+  .then(user => {
+    setSessionUser(user, false);
+    showToast(`ברוך הבא, ${user.displayName}!`, 'success');
+  });
+}
+
+function registerUser(username, password, displayName) {
+  const cleanUser = username.trim().toLowerCase();
+  const cleanPass = password.trim();
+  const cleanName = displayName.trim() || cleanUser;
+
+  return fetch('/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: cleanUser, password: cleanPass, displayName: cleanName })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error);
+    return { username: data.username, displayName: data.displayName, isNew: true };
+  })
+  .catch(err => {
+    // LocalStorage Fallback Registration for static web hosts
+    const usersJson = localStorage.getItem('mindmap_users') || '{}';
+    const users = JSON.parse(usersJson);
+    if (users[cleanUser]) {
+      throw new Error('שם המשתמש כבר קיים במערכת');
+    }
+    users[cleanUser] = { password: cleanPass, displayName: cleanName };
+    localStorage.setItem('mindmap_users', JSON.stringify(users));
+    return { username: cleanUser, displayName: cleanName, isNew: true };
+  })
+  .then(user => {
+    setSessionUser(user, true);
+    showToast(`חשבון חדש נוצר בהצלחה! ברוך הבא, ${user.displayName}!`, 'success');
+  });
+}
+
+function loginAsGuest() {
+  const guestUser = { username: 'guest', displayName: 'אורח (דמו)' };
+  setSessionUser(guestUser, false);
+  showToast('התחברת במצב משתמש אורח (דמו)', 'info');
+}
+
+function logoutUser() {
+  currentUser = null;
+  localStorage.removeItem('mindmap_current_user');
+  updateAuthUI();
+  showToast('התנתקת מהמערכת בהצלחה', 'info');
+}
+
+function setSessionUser(user, isNew = false) {
+  currentUser = user;
+  localStorage.setItem('mindmap_current_user', JSON.stringify(user));
+  updateAuthUI();
+  loadUserData(isNew);
+}
+
+function loadUserData(isNew = false) {
+  loadFromDB(currentUser ? currentUser.username : null).finally(() => {
+    if (myDiagram) {
+      const savedModel = getUserSavedModel('main');
+
+      // If new user or no saved model, populate with fresh Life Goals template
+      if (isNew || (!savedModel && currentUser && currentUser.username !== 'guest')) {
+        const newModel = new go.GraphLinksModel(presets.goals.nodes, presets.goals.links);
+        newModel.linkFromPortIdProperty = "fromPort";
+        newModel.linkToPortIdProperty = "toPort";
+        migrateNodeData(newModel.nodeDataArray);
+        myDiagram.model = newModel;
+        scheduleAutoSave();
+      } else if (savedModel) {
+        try {
+          const loadedModel = go.Model.fromJson(savedModel);
+          loadedModel.linkFromPortIdProperty = "fromPort";
+          loadedModel.linkToPortIdProperty = "toPort";
+          migrateNodeData(loadedModel.nodeDataArray);
+          myDiagram.model = loadedModel;
+        } catch (e) {
+          console.error("Failed to parse model for user:", e);
+        }
+      } else {
+        loadPreset('calmness');
+      }
+    }
+
+    const savedTab = localStorage.getItem('mindmap_active_tab') || 'main';
+    switchTab(savedTab, false);
+  });
+}
 
 // Curated modern HSL colors (Fill / Stroke pairs)
 const colorPresets = [
@@ -151,37 +293,21 @@ function initApp() {
   // Setup Event Listeners for HTML UI Elements
   setupUIEventListeners();
 
-  // Load data from DB persistent storage first, then switch to tab
-  loadFromDB().finally(() => {
-    // Populate myDiagram with loaded main model immediately
-    if (myDiagram) {
-      const saveKey = 'mindmap_auto_save_main';
-      let savedModel = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
-      if (savedModel) {
-        try {
-          const modelObj = JSON.parse(savedModel);
-          if (modelObj.linkDataArray) {
-            sanitizeLinkData(modelObj.linkDataArray);
-          }
-          const loadedModel = go.Model.fromJson(modelObj);
-          // Explicitly clear port properties to force auto-routing to closest sides
-          loadedModel.linkFromPortIdProperty = "";
-          loadedModel.linkToPortIdProperty = "";
-          sanitizeLinkData(loadedModel.linkDataArray);
-          migrateNodeData(loadedModel.nodeDataArray);
-          myDiagram.model = loadedModel;
-        } catch (e) {
-          console.error("Failed to load model on startup:", e);
-        }
-      }
+  // Check saved user session
+  const savedUserJson = localStorage.getItem('mindmap_current_user');
+  if (savedUserJson) {
+    try {
+      currentUser = JSON.parse(savedUserJson);
+    } catch (e) {
+      currentUser = null;
     }
+  }
 
-    const savedTab = localStorage.getItem('mindmap_active_tab') || 'main';
-    switchTab(savedTab, false);
+  updateAuthUI();
 
-    // Sync with Libero assets dynamically
-    syncLiberoLiquidAssets().catch(err => console.error("Libero sync error:", err));
-  });
+  if (currentUser) {
+    loadUserData(false);
+  }
 }
 
 // Helper to recursively collect descendants of a node for branch dragging
@@ -1116,6 +1242,96 @@ document.getElementById('addNodeBranchBtn').addEventListener('click', () => {
 
 // UI elements event bindings (Zoom, Undo/Redo, Presets, Export/Import)
 function setupUIEventListeners() {
+  // Logout Button Listener
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      logoutUser();
+    });
+  }
+
+  // Auth Mode Tabs Switcher
+  const authTabLogin = document.getElementById('authTabLogin');
+  const authTabRegister = document.getElementById('authTabRegister');
+  const displayNameGroup = document.getElementById('displayNameGroup');
+  const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const authErrorMessage = document.getElementById('authErrorMessage');
+
+  if (authTabLogin && authTabRegister) {
+    authTabLogin.addEventListener('click', () => {
+      authMode = 'login';
+      authTabLogin.style.background = 'var(--accent-color)';
+      authTabLogin.style.color = '#090d16';
+      authTabLogin.style.fontWeight = '700';
+
+      authTabRegister.style.background = 'transparent';
+      authTabRegister.style.color = 'var(--text-secondary)';
+      authTabRegister.style.fontWeight = '600';
+
+      if (displayNameGroup) displayNameGroup.style.display = 'none';
+      if (authSubmitBtn) authSubmitBtn.textContent = 'התחבר למערכת ➔';
+      if (authErrorMessage) authErrorMessage.style.display = 'none';
+    });
+
+    authTabRegister.addEventListener('click', () => {
+      authMode = 'register';
+      authTabRegister.style.background = 'var(--accent-color)';
+      authTabRegister.style.color = '#090d16';
+      authTabRegister.style.fontWeight = '700';
+
+      authTabLogin.style.background = 'transparent';
+      authTabLogin.style.color = 'var(--text-secondary)';
+      authTabLogin.style.fontWeight = '600';
+
+      if (displayNameGroup) displayNameGroup.style.display = 'flex';
+      if (authSubmitBtn) authSubmitBtn.textContent = 'צור חשבון חדש ➔';
+      if (authErrorMessage) authErrorMessage.style.display = 'none';
+    });
+  }
+
+  // Auth Form Submission
+  const authForm = document.getElementById('authForm');
+  if (authForm) {
+    authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const usernameInput = document.getElementById('authUsernameInput');
+      const passwordInput = document.getElementById('authPasswordInput');
+      const displayNameInput = document.getElementById('authDisplayNameInput');
+
+      const username = usernameInput ? usernameInput.value : '';
+      const password = passwordInput ? passwordInput.value : '';
+      const displayName = displayNameInput ? displayNameInput.value : '';
+
+      if (authErrorMessage) authErrorMessage.style.display = 'none';
+
+      if (authMode === 'login') {
+        loginUser(username, password)
+          .catch(err => {
+            if (authErrorMessage) {
+              authErrorMessage.textContent = err.message || 'שגיאה בהתחברות';
+              authErrorMessage.style.display = 'block';
+            }
+          });
+      } else {
+        registerUser(username, password, displayName)
+          .catch(err => {
+            if (authErrorMessage) {
+              authErrorMessage.textContent = err.message || 'שגיאה בהרשמה';
+              authErrorMessage.style.display = 'block';
+            }
+          });
+      }
+    });
+  }
+
+  // Guest Login Button
+  const guestLoginBtn = document.getElementById('guestLoginBtn');
+  if (guestLoginBtn) {
+    guestLoginBtn.addEventListener('click', () => {
+      loginAsGuest();
+    });
+  }
+
   // Preset selector
   const presetSelect = document.getElementById('presetSelect');
   if (presetSelect) {
@@ -2185,10 +2401,10 @@ function scheduleAutoSave() {
   autoSaveTimeout = setTimeout(() => {
     if (myDiagram) {
       const modelStr = myDiagram.model.toJson();
-      const saveKey = 'mindmap_auto_save_main';
+      const saveKey = getUserSaveKey('main');
       localStorage.setItem(saveKey, modelStr);
       localStorage.setItem('mindmap_active_tab', activeTab);
-      saveToDB('main', modelStr);
+      saveToDB('main', modelStr, currentUser ? currentUser.username : null);
     }
   }, 1000); // 1-second debounce delay
 }
@@ -2411,9 +2627,9 @@ function closeWorkPlanModal() {
 function switchTab(tabId, saveCurrent = true) {
   if (saveCurrent && myDiagram && activeTab === 'main') {
     const currentModelStr = myDiagram.model.toJson();
-    const currentSaveKey = 'mindmap_auto_save_main';
+    const currentSaveKey = getUserSaveKey('main');
     localStorage.setItem(currentSaveKey, currentModelStr);
-    saveToDB('main', currentModelStr);
+    saveToDB('main', currentModelStr, currentUser ? currentUser.username : null);
   }
 
   activeTab = tabId;
@@ -2492,8 +2708,7 @@ function switchTab(tabId, saveCurrent = true) {
 
     // Load the model
     if (myDiagram) {
-      const saveKey = 'mindmap_auto_save_main';
-      let savedModel = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
+      let savedModel = getUserSavedModel('main');
 
       if (savedModel) {
         try {
@@ -2620,7 +2835,7 @@ function getAllTasks() {
   if (activeTab === 'main' && myDiagram) {
     mainNodeData = myDiagram.model.nodeDataArray;
   } else {
-    let saved = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
+    let saved = getUserSavedModel('main');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -3090,7 +3305,7 @@ function renderGoalsDashboard() {
   if (myDiagram && myDiagram.model) {
     mainNodeData = myDiagram.model.nodeDataArray;
   } else {
-    let saved = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
+    let saved = getUserSavedModel('main');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -3840,11 +4055,12 @@ function triggerDownload(url, filename) {
 }
 
 // Save active tab mindmap model string to database
-function saveToDB(tabId, modelStr) {
+function saveToDB(tabId, modelStr, username = null) {
+  const user = username || (currentUser ? currentUser.username : null);
   fetch('/api/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tabId: tabId, model: modelStr })
+    body: JSON.stringify({ tabId: tabId, model: modelStr, username: user })
   })
   .then(res => {
     if (!res.ok) throw new Error();
@@ -3856,23 +4072,27 @@ function saveToDB(tabId, modelStr) {
 }
 
 // Load mindmap data from database on startup
-function loadFromDB() {
-  return fetch('/api/load')
+function loadFromDB(username = null) {
+  const user = username || (currentUser ? currentUser.username : null);
+  const url = user ? `/api/load?username=${encodeURIComponent(user)}` : '/api/load';
+  return fetch(url)
     .then(res => {
       if (!res.ok) throw new Error();
       return res.json();
     })
     .then(dbData => {
-      if (dbData.main) {
-        localStorage.setItem('mindmap_auto_save_main', dbData.main);
+      if (dbData && dbData.main) {
+        const saveKey = getUserSaveKey('main');
+        localStorage.setItem(saveKey, dbData.main);
       }
       console.log("Loaded data from DB successfully");
+      return dbData;
     })
     .catch(err => {
       console.log("Failed to load from DB, trying default_db.json as fallback");
       const currentVersion = '1.2';
       const savedVersion = localStorage.getItem('mindmap_db_version');
-      const saveKey = 'mindmap_auto_save_main';
+      const saveKey = getUserSaveKey('main');
       const hasLocalData = localStorage.getItem(saveKey) || localStorage.getItem('mindmap_auto_save');
       
       if (!hasLocalData || savedVersion !== currentVersion) {
@@ -3883,7 +4103,7 @@ function loadFromDB() {
           })
           .then(dbData => {
             if (dbData.main) {
-              localStorage.setItem('mindmap_auto_save_main', dbData.main);
+              localStorage.setItem(saveKey, dbData.main);
               localStorage.setItem('mindmap_db_version', currentVersion);
               console.log("Initialized/Updated localStorage with default_db.json");
             }
@@ -3892,6 +4112,7 @@ function loadFromDB() {
             console.error("Could not load default_db.json:", e);
           });
       }
+      return null;
     });
 }
 
