@@ -51,10 +51,14 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             if username in db_data['users']:
                 return self.send_json({'error': 'שם המשתמש כבר קיים במערכת'}, status=400)
 
+            user_tabs = {}
+            if 'main' in db_data:
+                user_tabs['main'] = db_data['main']
+
             db_data['users'][username] = {
                 'password': password,
                 'displayName': display_name,
-                'tabs': {}
+                'tabs': user_tabs
             }
             save_db(db_data)
             return self.send_json({'status': 'success', 'username': username, 'displayName': display_name})

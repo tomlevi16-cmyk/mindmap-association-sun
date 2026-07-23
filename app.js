@@ -132,28 +132,30 @@ function setSessionUser(user, isNew = false) {
 function loadUserData(isNew = false) {
   loadFromDB(currentUser ? currentUser.username : null).finally(() => {
     if (myDiagram) {
-      const savedModel = getUserSavedModel('main');
+      let savedModel = getUserSavedModel('main');
+      if (!savedModel) {
+        // Fallback to legacy root model so existing work is preserved
+        savedModel = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
+      }
 
-      // If new user or no saved model, populate with fresh Life Goals template
-      if (isNew || (!savedModel && currentUser && currentUser.username !== 'guest')) {
-        const newModel = new go.GraphLinksModel(presets.goals.nodes, presets.goals.links);
-        newModel.linkFromPortIdProperty = "fromPort";
-        newModel.linkToPortIdProperty = "toPort";
-        migrateNodeData(newModel.nodeDataArray);
-        myDiagram.model = newModel;
-        scheduleAutoSave();
-      } else if (savedModel) {
+      if (savedModel) {
         try {
           const loadedModel = go.Model.fromJson(savedModel);
           loadedModel.linkFromPortIdProperty = "fromPort";
           loadedModel.linkToPortIdProperty = "toPort";
           migrateNodeData(loadedModel.nodeDataArray);
           myDiagram.model = loadedModel;
+          scheduleAutoSave();
         } catch (e) {
           console.error("Failed to parse model for user:", e);
         }
       } else {
-        loadPreset('calmness');
+        const newModel = new go.GraphLinksModel(presets.goals.nodes, presets.goals.links);
+        newModel.linkFromPortIdProperty = "fromPort";
+        newModel.linkToPortIdProperty = "toPort";
+        migrateNodeData(newModel.nodeDataArray);
+        myDiagram.model = newModel;
+        scheduleAutoSave();
       }
     }
 
