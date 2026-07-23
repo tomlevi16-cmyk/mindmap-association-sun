@@ -115,6 +115,50 @@ function loginAsGuest() {
   showToast('התחברת במצב משתמש אורח (דמו)', 'info');
 }
 
+// Google SSO Login Handler
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
+function loginWithGoogle(profile) {
+  const googleId = profile.sub || profile.id || 'user';
+  const email = profile.email || `${googleId}@gmail.com`;
+  const displayName = profile.name || profile.given_name || email;
+
+  return fetch('/api/login_google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ googleId, email, displayName })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error);
+    return { username: data.username, displayName: data.displayName, email: data.email };
+  })
+  .catch(err => {
+    // LocalStorage Fallback for static web hosts (Netlify / GitHub Pages)
+    const cleanUser = `google_${googleId}`;
+    const usersJson = localStorage.getItem('mindmap_users') || '{}';
+    const users = JSON.parse(usersJson);
+    if (!users[cleanUser]) {
+      users[cleanUser] = { password: '', displayName: displayName, email: email };
+      localStorage.setItem('mindmap_users', JSON.stringify(users));
+    }
+    return { username: cleanUser, displayName: displayName, email: email };
+  })
+  .then(user => {
+    setSessionUser(user, false);
+    showToast(`התחברת בהצלחה עם Google, ${user.displayName}!`, 'success');
+  });
+}
+
 function logoutUser() {
   currentUser = null;
   localStorage.removeItem('mindmap_current_user');
@@ -1331,6 +1375,34 @@ function setupUIEventListeners() {
   if (guestLoginBtn) {
     guestLoginBtn.addEventListener('click', () => {
       loginAsGuest();
+    });
+  }
+
+  // Google SSO Button Click
+  const googleSsoBtn = document.getElementById('googleSsoBtn');
+  if (googleSsoBtn) {
+    googleSsoBtn.addEventListener('click', () => {
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        window.google.accounts.id.initialize({
+          client_id: "874563829102-demo.apps.googleusercontent.com",
+          callback: (response) => {
+            if (response && response.credential) {
+              const profile = parseJwt(response.credential);
+              if (profile) {
+                loginWithGoogle(profile);
+              }
+            }
+          }
+        });
+        window.google.accounts.id.prompt();
+      } else {
+        // Fallback simulated Google SSO popup for localhost/demo environment
+        const mockName = prompt("הכנס את שם משתמש הגוגל שלך:", "משתמש Google");
+        if (mockName) {
+          const mockId = Math.abs(mockName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) * 12345).toString();
+          loginWithGoogle({ sub: mockId, name: mockName, email: `${mockId}@gmail.com` });
+        }
+      }
     });
   }
 

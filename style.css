@@ -2261,3 +2261,10 @@ kbd {
   background: rgba(239, 68, 68, 0.25) !important;
   border-color: rgba(239, 68, 68, 0.5) !important;
 }
+
+.btn-google-sso:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-1px);
+}

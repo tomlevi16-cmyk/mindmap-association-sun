@@ -78,6 +78,38 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 'displayName': user.get('displayName', username)
             })
 
+        elif self.path == '/api/login_google':
+            google_id = req_data.get('googleId', '').strip()
+            email = req_data.get('email', '').strip().lower()
+            display_name = req_data.get('displayName', '').strip() or email or 'Google User'
+
+            if not google_id:
+                return self.send_json({'error': 'נתוני התחברות מגוגל חסרים'}, status=400)
+
+            username = f"google_{google_id}"
+            db_data = load_db()
+
+            if username not in db_data['users']:
+                user_tabs = {}
+                if 'main' in db_data:
+                    user_tabs['main'] = db_data['main']
+
+                db_data['users'][username] = {
+                    'password': '',
+                    'email': email,
+                    'displayName': display_name,
+                    'tabs': user_tabs
+                }
+                save_db(db_data)
+
+            user = db_data['users'][username]
+            return self.send_json({
+                'status': 'success',
+                'username': username,
+                'displayName': user.get('displayName', display_name),
+                'email': email
+            })
+
         elif self.path == '/api/save':
             tab_id = req_data.get('tabId')
             model_str = req_data.get('model')
