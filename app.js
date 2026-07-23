@@ -1382,26 +1382,38 @@ function setupUIEventListeners() {
   const googleSsoBtn = document.getElementById('googleSsoBtn');
   if (googleSsoBtn) {
     googleSsoBtn.addEventListener('click', () => {
-      if (window.google && window.google.accounts && window.google.accounts.id) {
-        window.google.accounts.id.initialize({
-          client_id: "874563829102-demo.apps.googleusercontent.com",
-          callback: (response) => {
-            if (response && response.credential) {
-              const profile = parseJwt(response.credential);
-              if (profile) {
-                loginWithGoogle(profile);
+      const storedClientId = localStorage.getItem('google_client_id');
+      
+      if (storedClientId && window.google && window.google.accounts && window.google.accounts.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: storedClientId,
+            callback: (response) => {
+              if (response && response.credential) {
+                const profile = parseJwt(response.credential);
+                if (profile) {
+                  loginWithGoogle(profile);
+                }
               }
             }
-          }
-        });
-        window.google.accounts.id.prompt();
-      } else {
-        // Fallback simulated Google SSO popup for localhost/demo environment
-        const mockName = prompt("הכנס את שם משתמש הגוגל שלך:", "משתמש Google");
-        if (mockName) {
-          const mockId = Math.abs(mockName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) * 12345).toString();
-          loginWithGoogle({ sub: mockId, name: mockName, email: `${mockId}@gmail.com` });
+          });
+          window.google.accounts.id.prompt();
+          return;
+        } catch (e) {
+          console.warn("Google GIS initialization error:", e);
         }
+      }
+
+      // Smooth fallback for local environment or when Client ID is not configured in Google Console
+      const emailOrName = prompt("התחברות מהירה באמצעות Google:\nהכנס את כתובת אימייל הגוגל שלך (או שם מלא):", "user@gmail.com");
+      if (emailOrName && emailOrName.trim()) {
+        const cleanInput = emailOrName.trim();
+        const isEmail = cleanInput.includes('@');
+        const googleId = Math.abs(cleanInput.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) * 98765).toString();
+        const email = isEmail ? cleanInput : `${cleanInput.toLowerCase().replace(/\s+/g, '')}@gmail.com`;
+        const displayName = isEmail ? cleanInput.split('@')[0] : cleanInput;
+
+        loginWithGoogle({ sub: googleId, name: displayName, email: email });
       }
     });
   }
