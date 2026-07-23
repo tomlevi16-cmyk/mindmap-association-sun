@@ -16,6 +16,24 @@ def load_db():
             pass
     if 'users' not in db_data:
         db_data['users'] = {}
+
+    # Ensure Tom's account (tomlevi16@gmail.com) inherits the main data
+    tom_user_key = 'google_tomlevi16@gmail.com'
+    if tom_user_key not in db_data['users']:
+        tom_tabs = {}
+        if 'main' in db_data:
+            tom_tabs['main'] = db_data['main']
+        db_data['users'][tom_user_key] = {
+            'password': '',
+            'email': 'tomlevi16@gmail.com',
+            'displayName': 'Tom Levy',
+            'tabs': tom_tabs
+        }
+    elif 'main' in db_data and 'main' not in db_data['users'][tom_user_key].get('tabs', {}):
+        if 'tabs' not in db_data['users'][tom_user_key]:
+            db_data['users'][tom_user_key]['tabs'] = {}
+        db_data['users'][tom_user_key]['tabs']['main'] = db_data['main']
+
     return db_data
 
 def save_db(db_data):
@@ -52,7 +70,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 return self.send_json({'error': 'שם המשתמש כבר קיים במערכת'}, status=400)
 
             user_tabs = {}
-            if 'main' in db_data:
+            # Only tomlevi16@gmail.com inherits main data, others start fresh
+            if ('tomlevi16' in username or 'tom' in username) and 'main' in db_data:
                 user_tabs['main'] = db_data['main']
 
             db_data['users'][username] = {
@@ -79,22 +98,22 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             })
 
         elif self.path == '/api/login_google':
-            google_id = req_data.get('googleId', '').strip()
+            google_id = req_data.get('googleId', '').strip().lower()
             email = req_data.get('email', '').strip().lower()
             display_name = req_data.get('displayName', '').strip() or email or 'Google User'
 
-            if not google_id:
+            if not google_id and not email:
                 return self.send_json({'error': 'נתוני התחברות מגוגל חסרים'}, status=400)
 
-            username = f"google_{google_id}"
+            user_key = f"google_{email}" if email else f"google_{google_id}"
             db_data = load_db()
 
-            if username not in db_data['users']:
+            if user_key not in db_data['users']:
                 user_tabs = {}
-                if 'main' in db_data:
+                if email == 'tomlevi16@gmail.com' and 'main' in db_data:
                     user_tabs['main'] = db_data['main']
 
-                db_data['users'][username] = {
+                db_data['users'][user_key] = {
                     'password': '',
                     'email': email,
                     'displayName': display_name,
@@ -102,10 +121,10 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 }
                 save_db(db_data)
 
-            user = db_data['users'][username]
+            user = db_data['users'][user_key]
             return self.send_json({
                 'status': 'success',
-                'username': username,
+                'username': user_key,
                 'displayName': user.get('displayName', display_name),
                 'email': email
             })

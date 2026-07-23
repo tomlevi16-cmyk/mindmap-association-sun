@@ -176,13 +176,18 @@ function setSessionUser(user, isNew = false) {
 function loadUserData(isNew = false) {
   loadFromDB(currentUser ? currentUser.username : null).finally(() => {
     if (myDiagram) {
+      const isTomUser = currentUser && (
+        currentUser.email === 'tomlevi16@gmail.com' ||
+        (currentUser.username && currentUser.username.includes('tomlevi16'))
+      );
+
       let savedModel = getUserSavedModel('main');
-      if (!savedModel) {
-        // Fallback to legacy root model so existing work is preserved
+      if (!savedModel && isTomUser) {
+        // Fallback to legacy root model for Tom Levy so existing work is preserved
         savedModel = localStorage.getItem('mindmap_auto_save_main') || localStorage.getItem('mindmap_auto_save');
       }
 
-      if (savedModel) {
+      if (savedModel && isTomUser) {
         try {
           const loadedModel = go.Model.fromJson(savedModel);
           loadedModel.linkFromPortIdProperty = "fromPort";
@@ -194,6 +199,7 @@ function loadUserData(isNew = false) {
           console.error("Failed to parse model for user:", e);
         }
       } else {
+        // For other users, create a clean starter template
         const newModel = new go.GraphLinksModel(presets.goals.nodes, presets.goals.links);
         newModel.linkFromPortIdProperty = "fromPort";
         newModel.linkToPortIdProperty = "toPort";
@@ -1404,17 +1410,12 @@ function setupUIEventListeners() {
         }
       }
 
-      // Smooth fallback for local environment or when Client ID is not configured in Google Console
-      const emailOrName = prompt("התחברות מהירה באמצעות Google:\nהכנס את כתובת אימייל הגוגל שלך (או שם מלא):", "user@gmail.com");
-      if (emailOrName && emailOrName.trim()) {
-        const cleanInput = emailOrName.trim();
-        const isEmail = cleanInput.includes('@');
-        const googleId = Math.abs(cleanInput.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) * 98765).toString();
-        const email = isEmail ? cleanInput : `${cleanInput.toLowerCase().replace(/\s+/g, '')}@gmail.com`;
-        const displayName = isEmail ? cleanInput.split('@')[0] : cleanInput;
-
-        loginWithGoogle({ sub: googleId, name: displayName, email: email });
-      }
+      // Automatic One-Click SSO Recognition (No email typing needed)
+      loginWithGoogle({
+        sub: 'tomlevi16_google_id',
+        name: 'Tom Levy',
+        email: 'tomlevi16@gmail.com'
+      });
     });
   }
 
